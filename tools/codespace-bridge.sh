@@ -100,21 +100,30 @@ EOF
 
 sudo mkdir -p /run/sshd
 
-# sudo starts sshd, so its pidfile is root-owned and an unprivileged pkill
-# cannot signal it. A survivor keeps the port and the new instance dies
-# silently — leaving an sshd running with whatever config it started with.
-sudo pkill -F "$STATE_DIR/sshd.pid" 2>/dev/null || true
-sudo pkill -f "sshd_config" 2>/dev/null || true
-sleep 1
+# A fixed path, never `command -v sshd`: this runs under sudo, and resolving
+# the binary through PATH would let anything earlier on PATH run as root.
+SSHD_BIN=/usr/sbin/sshd
+if [ ! -x "$SSHD_BIN" ]; then
+  echo "sshd not found at $SSHD_BIN" >&2
+  exit 1
+fi
 
-SSHD_BIN="$(command -v sshd || echo /usr/sbin/sshd)"
-
-# -t validates the config before we try to run it, so a bad directive is
-# reported here rather than as an unexplained "Permission denied" later.
+# Validate before stopping anything. Killing the running daemon first and
+# then discovering the new config is invalid leaves no listener at all.
 if ! sudo "$SSHD_BIN" -t -f "$STATE_DIR/sshd_config"; then
   echo "sshd rejected its configuration; see above." >&2
   exit 1
 fi
+
+# Only our own daemon, by pidfile. Matching on the command line would also
+# match the Codespaces-managed sshd — the one `gh codespace ssh` and VS Code
+# depend on — and killing that breaks the Codespace itself.
+#
+# sudo because `sudo sshd` wrote a root-owned pidfile that an unprivileged
+# pkill cannot signal; a survivor keeps the port and the replacement dies
+# silently, leaving whatever config the old instance started with.
+sudo pkill -F "$STATE_DIR/sshd.pid" 2>/dev/null || true
+sleep 1
 
 sudo "$SSHD_BIN" -f "$STATE_DIR/sshd_config"
 sleep 1
