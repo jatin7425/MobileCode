@@ -1,0 +1,5 @@
+tags:
+  # Spins up a real sshd and a WebSocket bridge. Slower than a unit test and
+  # skips itself when openssh-server is absent.
+  integration:
+    timeout: 2x

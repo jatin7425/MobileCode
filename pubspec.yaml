@@ -41,6 +41,7 @@ dependencies:
   sqflite: ^2.4.3
   path: ^1.9.1
   uuid: ^4.6.0
+  http: ^1.6.0
 
 dependency_overrides:
   # jni 1.0.1 applies the Kotlin plugin only when AGP major < 9 but calls
