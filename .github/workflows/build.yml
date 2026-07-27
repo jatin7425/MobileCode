@@ -56,6 +56,22 @@ jobs:
 
       - run: flutter pub get
 
+      # Without a stable key, every run signs with a freshly generated debug
+      # keystore and Android treats each build as a different app — installable
+      # only by uninstalling first, which wipes the user's hosts and keys.
+      - name: Decode signing keystore
+        id: keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.MOBILECODE_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "No keystore secret set; falling back to debug signing." >&2
+            echo "path=" >> "$GITHUB_OUTPUT"
+          else
+            printf '%s' "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
+            echo "path=$RUNNER_TEMP/release.jks" >> "$GITHUB_OUTPUT"
+          fi
+
       # A universal APK rather than --split-per-abi: one file that installs on
       # any phone, which is the point of a build you sideload by hand.
       # GITHUB_CLIENT_ID identifies the OAuth App for the device flow. Device
@@ -71,6 +87,10 @@ jobs:
             --dart-define=GITHUB_CLIENT_ID="$GITHUB_CLIENT_ID"
         env:
           GITHUB_CLIENT_ID: ${{ secrets.MOBILECODE_GITHUB_CLIENT_ID }}
+          MOBILECODE_KEYSTORE_PATH: ${{ steps.keystore.outputs.path }}
+          MOBILECODE_KEYSTORE_PASSWORD: ${{ secrets.MOBILECODE_KEYSTORE_PASSWORD }}
+          MOBILECODE_KEY_ALIAS: ${{ secrets.MOBILECODE_KEY_ALIAS }}
+          MOBILECODE_KEY_PASSWORD: ${{ secrets.MOBILECODE_KEY_PASSWORD }}
 
       - uses: actions/upload-artifact@v4
         with:

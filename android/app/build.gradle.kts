@@ -25,11 +25,39 @@ android {
         versionName = flutter.versionName
     }
 
+    // Android refuses to update an installed app when the signing key
+    // changes, and Gradle generates a fresh ~/.android/debug.keystore whenever
+    // one is absent. CI runners start clean every time, so debug-signed builds
+    // get a different key each run and can only be installed by uninstalling
+    // first — which also destroys the user's hosts, pins, and stored keys.
+    //
+    // Supplying a keystore through the environment keeps the signature stable
+    // across runs, so a new build installs over the old one as an update.
+    // takeIf: an unset GitHub Actions secret expands to an empty string rather
+    // than being absent, and "" is not a keystore path.
+    val releaseKeystore =
+        System.getenv("MOBILECODE_KEYSTORE_PATH")?.takeIf { it.isNotBlank() }
+
+    signingConfigs {
+        if (releaseKeystore != null) {
+            create("release") {
+                storeFile = file(releaseKeystore)
+                storePassword = System.getenv("MOBILECODE_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("MOBILECODE_KEY_ALIAS") ?: "mobilecode"
+                keyPassword = System.getenv("MOBILECODE_KEY_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            // Falls back to debug signing so a plain `flutter run --release`
+            // still works with no keystore configured.
+            signingConfig = if (releaseKeystore != null) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
+            }
         }
     }
 }

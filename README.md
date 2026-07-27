@@ -71,14 +71,45 @@ GitHub always wraps artifacts in a zip, so what downloads is
 
 ### Android
 
-Works as you would hope. The release APK is signed with the standard debug key
-(see `android/app/build.gradle.kts`), which is enough to install it yourself:
-copy the `.apk` to the phone, open it, and allow installing from unknown
+Copy the `.apk` to the phone, open it, and allow installing from unknown
 sources when prompted.
 
-That key is fine for personal sideloading and **not** fine for the Play Store,
-which rejects debug-signed uploads. Publishing means generating an upload
-keystore and wiring it into the Gradle release config.
+#### Installing updates over the top
+
+Without a signing key configured, each CI run signs with a **different** key:
+Gradle generates `~/.android/debug.keystore` whenever one is missing, and CI
+runners start clean every time. Android refuses to update an app whose
+signature changed, so each new build can only be installed by uninstalling
+first — which destroys your hosts, host key pins, and stored keys.
+
+Configure a stable key once and builds install as updates. Generate a keystore:
+
+```sh
+keytool -genkeypair -v \
+  -keystore mobilecode.jks -storetype PKCS12 \
+  -keyalg RSA -keysize 2048 -validity 10000 \
+  -alias mobilecode \
+  -dname "CN=MobileCode, O=MobileCode, C=IN"
+```
+
+Then add four repository secrets:
+
+```sh
+base64 -w0 mobilecode.jks | gh secret set MOBILECODE_KEYSTORE_BASE64
+gh secret set MOBILECODE_KEYSTORE_PASSWORD   # the store password you chose
+gh secret set MOBILECODE_KEY_PASSWORD        # the key password you chose
+gh secret set MOBILECODE_KEY_ALIAS --body mobilecode
+```
+
+**Keep `mobilecode.jks` safe and do not commit it.** Lose it and you can never
+update an installed app again — only uninstall and start over. A signing key
+in a public repo would let anyone build an APK that Android accepts as an
+update to yours.
+
+With no keystore secret set, builds still work and fall back to debug signing;
+you just keep having to uninstall between versions.
+
+This key is for sideloading. The Play Store has its own signing requirements.
 
 ### iOS
 
