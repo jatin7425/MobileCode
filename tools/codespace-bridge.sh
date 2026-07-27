@@ -99,8 +99,30 @@ PermitUserEnvironment no
 EOF
 
 sudo mkdir -p /run/sshd
-pkill -F "$STATE_DIR/sshd.pid" 2>/dev/null || true
-sudo "$(command -v sshd || echo /usr/sbin/sshd)" -f "$STATE_DIR/sshd_config"
+
+# sudo starts sshd, so its pidfile is root-owned and an unprivileged pkill
+# cannot signal it. A survivor keeps the port and the new instance dies
+# silently — leaving an sshd running with whatever config it started with.
+sudo pkill -F "$STATE_DIR/sshd.pid" 2>/dev/null || true
+sudo pkill -f "sshd_config" 2>/dev/null || true
+sleep 1
+
+SSHD_BIN="$(command -v sshd || echo /usr/sbin/sshd)"
+
+# -t validates the config before we try to run it, so a bad directive is
+# reported here rather than as an unexplained "Permission denied" later.
+if ! sudo "$SSHD_BIN" -t -f "$STATE_DIR/sshd_config"; then
+  echo "sshd rejected its configuration; see above." >&2
+  exit 1
+fi
+
+sudo "$SSHD_BIN" -f "$STATE_DIR/sshd_config"
+sleep 1
+
+if ! (command -v ss >/dev/null 2>&1 && ss -ltn 2>/dev/null | grep -q "127.0.0.1:$SSHD_PORT "); then
+  echo "sshd is not listening on 127.0.0.1:$SSHD_PORT." >&2
+  exit 1
+fi
 
 echo "==> Starting WebSocket bridge on :$BRIDGE_PORT"
 
