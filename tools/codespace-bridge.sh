@@ -94,8 +94,28 @@ nohup websocat --binary \
 sleep 1
 
 if [ -n "${CODESPACE_NAME:-}" ] && command -v gh >/dev/null 2>&1; then
-  echo "==> Making port $BRIDGE_PORT public"
-  gh codespace ports visibility "$BRIDGE_PORT:public" -c "$CODESPACE_NAME"
+  # GitHub forwards a port when it notices something listening, and that scan
+  # is not instant. Setting visibility before the port is registered fails
+  # with a 404 — the tunnel genuinely does not know the port yet — so retry
+  # rather than treat the first failure as final.
+  echo "==> Making port $BRIDGE_PORT public (waiting for GitHub to see it)"
+  published=""
+  for _ in $(seq 1 20); do
+    if gh codespace ports visibility "$BRIDGE_PORT:public" \
+         -c "$CODESPACE_NAME" >/dev/null 2>&1; then
+      published=yes
+      break
+    fi
+    sleep 3
+  done
+
+  if [ -n "$published" ]; then
+    echo "    port $BRIDGE_PORT is public"
+  else
+    echo
+    echo "    Could not set it automatically after 60s. Open the PORTS panel,"
+    echo "    right-click port $BRIDGE_PORT, and set Port Visibility to Public."
+  fi
 else
   echo
   echo "Could not set port visibility automatically. In the Ports panel, set"
