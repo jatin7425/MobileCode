@@ -11,15 +11,27 @@ import 'package:mobilecode/features/assistant/llm_client.dart';
 import 'package:mobilecode/features/assistant/speech_input.dart';
 import 'package:mobilecode/features/voice/voice_catalog.dart';
 
-/// Ray as the endpoint lists him: five moods, no Sad.
-final _speaker = VoiceCatalog.fromNames(const [
+/// Ray as the endpoint lists him, in both languages the app offers.
+final _catalog = VoiceCatalog.fromNames(const [
   'Magpie-Multilingual.EN-US.Ray',
   'Magpie-Multilingual.EN-US.Ray.Neutral',
   'Magpie-Multilingual.EN-US.Ray.Calm',
   'Magpie-Multilingual.EN-US.Ray.Angry',
   'Magpie-Multilingual.EN-US.Ray.Happy',
   'Magpie-Multilingual.EN-US.Ray.Fearful',
-]).byKey('Magpie-Multilingual.EN-US.Ray')!;
+  'Magpie-Multilingual.HI-IN.Ray',
+  'Magpie-Multilingual.HI-IN.Ray.Neutral',
+  'Magpie-Multilingual.HI-IN.Ray.Calm',
+  'Magpie-Multilingual.HI-IN.Ray.Angry',
+  'Magpie-Multilingual.HI-IN.Ray.Happy',
+  'Magpie-Multilingual.HI-IN.Ray.Fearful',
+  // Phung is Hindi-only, for the case where the assigned speaker does not
+  // exist in the other language.
+  'Magpie-Multilingual.HI-IN.Phung.Neutral',
+  'Magpie-Multilingual.HI-IN.Phung.Sad',
+]);
+
+final _speaker = _catalog.byKey('Magpie-Multilingual.EN-US.Ray')!;
 
 class FakeSpeech implements SpeechInput {
   late void Function(String text, bool isFinal) _result;
@@ -72,6 +84,7 @@ class FakeSpeech implements SpeechInput {
 class FakeSink implements AudioSink {
   final played = <Uint8List>[];
   var stopped = false;
+  var disposed = false;
 
   @override
   Future<void> play(Uint8List wav) async => played.add(wav);
@@ -80,7 +93,7 @@ class FakeSink implements AudioSink {
   Future<void> stop() async => stopped = true;
 
   @override
-  void dispose() {}
+  void dispose() => disposed = true;
 }
 
 /// Answers every chat request with [reply], or throws [failWith].
@@ -386,6 +399,82 @@ void main() {
     test('names the language it should answer in', () {
       expect(AssistantLanguage.hindi.displayName, 'Hindi');
       expect(AssistantLanguage.hindi.voiceLocale, 'HI-IN');
+    });
+
+    test('speaks as the same person in the other language', () {
+      final controller = AssistantController(
+        speech: FakeSpeech(),
+        audio: FakeSink(),
+        speaker: _speaker,
+        catalog: _catalog,
+      );
+
+      expect(controller.activeSpeaker!.key, 'Magpie-Multilingual.EN-US.Ray');
+
+      controller.setLanguage(AssistantLanguage.hindi);
+
+      // Same character, Hindi locale — not a different voice, and not the
+      // English voice reading Hindi text.
+      expect(controller.activeSpeaker!.locale, 'HI-IN');
+      expect(controller.activeSpeaker!.speaker, 'Ray');
+    });
+
+    test('keeps the assigned speaker when they have no counterpart', () {
+      final controller = AssistantController(
+        speech: FakeSpeech(),
+        audio: FakeSink(),
+        speaker: _catalog.byKey('Magpie-Multilingual.HI-IN.Phung'),
+        catalog: _catalog,
+        language: AssistantLanguage.english,
+      );
+
+      // Phung is Hindi-only; falling back to him beats going silent.
+      expect(controller.activeSpeaker!.speaker, 'Phung');
+      expect(controller.activeSpeaker!.locale, 'HI-IN');
+    });
+
+    test('falls back to the assigned speaker with no catalog', () {
+      final controller = AssistantController(
+        speech: FakeSpeech(),
+        audio: FakeSink(),
+        speaker: _speaker,
+        language: AssistantLanguage.hindi,
+      );
+
+      expect(controller.activeSpeaker, same(_speaker));
+    });
+  });
+
+  group('resource handling', () {
+    test('disposes the audio sink it owns', () {
+      final sink = FakeSink();
+      AssistantController(speech: FakeSpeech(), audio: sink).dispose();
+
+      // The screen builds a fresh sink whenever the wiring changes, so a
+      // controller that does not release its own strands a native player.
+      expect(sink.disposed, isTrue);
+    });
+
+    test('does not synthesise an empty line', () async {
+      final speech = FakeSpeech();
+      final sink = FakeSink();
+      final controller = AssistantController(
+        speech: speech,
+        audio: sink,
+        llm: _model('{"emotion":"Happy","text":""}'),
+        speaker: _speaker,
+        catalog: _catalog,
+      );
+
+      await controller.toggleListening();
+      speech.say('say nothing');
+      await pumpEventQueue();
+
+      // An empty answer must not be read aloud, and must certainly not be
+      // read aloud as the raw JSON it arrived in.
+      expect(controller.history.last.text, isEmpty);
+      expect(sink.played, isEmpty);
+      expect(controller.phase, AssistantPhase.idle);
     });
   });
 

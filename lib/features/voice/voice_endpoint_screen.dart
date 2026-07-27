@@ -37,19 +37,30 @@ class _VoiceEndpointScreenState extends ConsumerState<VoiceEndpointScreen> {
     super.dispose();
   }
 
+  /// A read that throws here would leave the spinner up for good, so the
+  /// failure is shown instead and the fields stay editable.
   Future<void> _load() async {
-    final url = await ref
-        .read(settingsRepositoryProvider)
-        .read(SettingsRepository.voiceEndpoint);
-    final key = await ref
-        .read(credentialStoreProvider)
-        .read(CredentialStore.voiceApiKeyRef);
-    if (!mounted) return;
-    setState(() {
-      _url.text = url ?? '';
-      _key.text = key ?? '';
-      _loading = false;
-    });
+    try {
+      final url = await ref
+          .read(settingsRepositoryProvider)
+          .read(SettingsRepository.voiceEndpoint);
+      final key = await ref
+          .read(credentialStoreProvider)
+          .read(CredentialStore.voiceApiKeyRef);
+      if (!mounted) return;
+      setState(() {
+        _url.text = url ?? '';
+        _key.text = key ?? '';
+        _loading = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _failed = true;
+        _result = 'Could not read the saved configuration: $error';
+      });
+    }
   }
 
   @override
@@ -188,15 +199,18 @@ class _VoiceEndpointScreenState extends ConsumerState<VoiceEndpointScreen> {
     // entry. Without this the spinner would run forever with both buttons
     // disabled, and the only escape would be leaving the screen.
     try {
-      if (url.isEmpty) {
-        await settings.delete(SettingsRepository.voiceEndpoint);
-      } else {
-        await settings.write(SettingsRepository.voiceEndpoint, url);
-      }
+      // Key before endpoint: if the keychain write fails the stored endpoint
+      // is still the old one, so the pair stays consistent. The other order
+      // can leave a new endpoint beside the previous key.
       if (key.isEmpty) {
         await credentials.delete(CredentialStore.voiceApiKeyRef);
       } else {
         await credentials.write(CredentialStore.voiceApiKeyRef, key);
+      }
+      if (url.isEmpty) {
+        await settings.delete(SettingsRepository.voiceEndpoint);
+      } else {
+        await settings.write(SettingsRepository.voiceEndpoint, url);
       }
       if (mounted) Navigator.of(context).pop(true);
     } catch (error) {

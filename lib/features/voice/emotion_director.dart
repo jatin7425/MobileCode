@@ -108,7 +108,11 @@ class EmotionDirector {
     final requested = decoded['emotion']?.toString().trim();
 
     return SpokenLine(
-      text: (text == null || text.isEmpty) ? reply.trim() : text,
+      // Deliberately not falling back to the raw reply here. Decoding
+      // succeeded, so the raw reply *is* the JSON — using it would have the
+      // assistant read `{"emotion":"Happy","text":""}` out loud. An empty
+      // line is the honest result; the caller skips synthesis for it.
+      text: text ?? '',
       emotion: _resolve(requested),
       clamped: allowed.isNotEmpty &&
           requested != null &&

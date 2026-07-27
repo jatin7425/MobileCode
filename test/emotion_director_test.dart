@@ -134,10 +134,14 @@ void main() {
           reason: 'omitting a mood is not the same as asking for a bad one');
     });
 
-    test('uses the whole reply when text is empty', () {
+    test('never reads its own JSON aloud when text is empty', () {
       final line = ray.parse('{"emotion":"Happy","text":""}');
 
-      expect(line.text, isNotEmpty);
+      // Decoding succeeded, so the raw reply *is* the JSON. Falling back to
+      // it would have the assistant say `{"emotion":"Happy","text":""}` out
+      // loud; an empty line is the honest answer and the caller skips it.
+      expect(line.text, isEmpty);
+      expect(line.emotion, 'Happy');
     });
 
     test('returns no emotion for a speaker that has none', () {

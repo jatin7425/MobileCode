@@ -33,6 +33,7 @@ class AssistantController extends ChangeNotifier {
     this.llm,
     this.voice,
     this.speaker,
+    this.catalog,
     this.language = AssistantLanguage.english,
   });
 
@@ -49,7 +50,33 @@ class AssistantController extends ChangeNotifier {
   /// The speaker this assistant talks as, if one has been assigned.
   final VoiceSpeaker? speaker;
 
+  /// Everything the endpoint offers, used to find the assigned speaker again
+  /// in whichever language is currently selected.
+  final VoiceCatalog? catalog;
+
   AssistantLanguage language;
+
+  /// The assigned speaker, in the language being spoken right now.
+  ///
+  /// Magpie ships the same speakers across locales — Ray exists in both EN-US
+  /// and HI-IN — so switching language should keep the same character rather
+  /// than changing who is talking. Without this the voice name stays on the
+  /// old locale while the text and language tag change, which sends Hindi
+  /// prose to an `en-US` voice.
+  ///
+  /// Falls back to the assigned speaker when that person does not exist in
+  /// the target locale, which is better than going silent.
+  VoiceSpeaker? get activeSpeaker {
+    final assigned = speaker;
+    final voices = catalog;
+    if (assigned == null || voices == null) return assigned;
+    if (assigned.locale == language.voiceLocale) return assigned;
+
+    final key = assigned.family.isEmpty
+        ? '${language.voiceLocale}.${assigned.speaker}'
+        : '${assigned.family}.${language.voiceLocale}.${assigned.speaker}';
+    return voices.byKey(key) ?? assigned;
+  }
 
   var _phase = AssistantPhase.idle;
   var _heard = '';
@@ -74,7 +101,7 @@ class AssistantController extends ChangeNotifier {
   List<Utterance> get history => List.unmodifiable(_history);
 
   bool get canAnswer => llm != null;
-  bool get canSpeak => voice != null && speaker != null;
+  bool get canSpeak => voice != null && activeSpeaker != null;
 
   /// Starts a turn, or ends one early if already listening.
   Future<void> toggleListening() async {
@@ -135,7 +162,11 @@ class AssistantController extends ChangeNotifier {
     }
 
     try {
-      final director = speaker == null ? null : EmotionDirector(speaker!);
+      // Built from the speaker who will actually perform the line: mood sets
+      // differ between locales, so the enum has to come from the same voice
+      // the synthesis call will use.
+      final performer = activeSpeaker;
+      final director = performer == null ? null : EmotionDirector(performer);
       final reply = await model.complete(
         messages: _messages(question, director),
         responseFormat: director?.responseFormat(),
@@ -158,8 +189,10 @@ class AssistantController extends ChangeNotifier {
 
   Future<void> _speak(SpokenLine line, int turn) async {
     final client = voice;
-    final speakerVoice = speaker;
-    if (client == null || speakerVoice == null) {
+    final speakerVoice = activeSpeaker;
+    // An empty line is not worth a synthesis request, and asking for one
+    // returns an error rather than silence.
+    if (line.text.isEmpty || client == null || speakerVoice == null) {
       // Nothing to speak with — the answer is still on screen, which is a
       // better outcome than treating this as a failed turn.
       _setPhase(AssistantPhase.idle);
@@ -241,6 +274,10 @@ class AssistantController extends ChangeNotifier {
     _turn++; // abandons anything still in flight
     speech.cancel();
     audio.stop();
+    // The sink is owned by this controller and the screen builds a fresh one
+    // each time the wiring changes, so without releasing it here every trip
+    // to the settings screen strands another native player.
+    audio.dispose();
     super.dispose();
   }
 }

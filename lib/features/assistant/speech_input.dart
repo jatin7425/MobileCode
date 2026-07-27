@@ -31,6 +31,13 @@ class PlatformSpeechInput implements SpeechInput {
   final SpeechToText _speech;
   var _ready = false;
 
+  /// The handler belonging to the turn currently listening.
+  ///
+  /// `initialize` may only be called once per app session and its callbacks
+  /// cannot be replaced afterwards, so the plugin's error channel is global
+  /// while ours is per-turn. Holding the active handler here bridges the two.
+  void Function(String message)? _onError;
+
   @override
   bool get isListening => _speech.isListening;
 
@@ -38,11 +45,30 @@ class PlatformSpeechInput implements SpeechInput {
   Future<bool> initialise() async {
     if (_ready) return true;
     _ready = await _speech.initialize(
-      onError: (SpeechRecognitionError error) {},
+      // Recogniser failures arrive here, not on the listen() callback. Left
+      // as a no-op this swallows them, and because `cancelOnError` ends the
+      // session anyway the caller is never told — it waits on a microphone
+      // that has already stopped.
+      onError: (SpeechRecognitionError error) =>
+          _onError?.call(_describe(error)),
       onStatus: (_) {},
       debugLogging: false,
     );
     return _ready;
+  }
+
+  /// Turns a plugin error code into something worth showing a person.
+  static String _describe(SpeechRecognitionError error) {
+    return switch (error.errorMsg) {
+      'error_permission' || 'error_permission_denied' =>
+        'Microphone permission was denied.',
+      'error_no_match' => 'Nothing was recognised — try again.',
+      'error_speech_timeout' => 'No speech detected.',
+      'error_network' || 'error_network_timeout' =>
+        'Speech recognition needs a network connection.',
+      'error_busy' => 'The recogniser is busy.',
+      final other => 'Speech recognition failed: $other',
+    };
   }
 
   @override
@@ -52,6 +78,8 @@ class PlatformSpeechInput implements SpeechInput {
     required void Function(double level) onLevel,
     required void Function(String message) onError,
   }) async {
+    _onError = onError;
+
     if (!await initialise()) {
       onError('No speech recogniser is available on this device.');
       return;
@@ -76,10 +104,16 @@ class PlatformSpeechInput implements SpeechInput {
   }
 
   @override
-  Future<void> stop() => _speech.stop();
+  Future<void> stop() {
+    _onError = null;
+    return _speech.stop();
+  }
 
   @override
-  Future<void> cancel() => _speech.cancel();
+  Future<void> cancel() {
+    _onError = null;
+    return _speech.cancel();
+  }
 
   /// Android reports roughly -2..10 dB and iOS a different range again.
   /// Squashed to 0..1 so the HUD does not have to know which platform it is on.

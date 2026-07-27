@@ -74,6 +74,9 @@ class _AssistantScreenState extends ConsumerState<AssistantScreen>
       llm: ref.read(llmClientProvider).valueOrNull,
       voice: ref.read(voiceClientProvider).valueOrNull,
       speaker: ref.read(assistantSpeakerProvider).valueOrNull,
+      // Lets the controller find the same speaker again in the other
+      // language, so the language toggle changes accent rather than person.
+      catalog: ref.read(voiceCatalogProvider).valueOrNull,
     );
     controller.addListener(() => setState(() {}));
     _controller = controller;

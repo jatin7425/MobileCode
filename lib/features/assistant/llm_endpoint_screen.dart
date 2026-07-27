@@ -38,20 +38,31 @@ class _LlmEndpointScreenState extends ConsumerState<LlmEndpointScreen> {
     super.dispose();
   }
 
+  /// A read that throws here would leave the spinner up for good, so the
+  /// failure is shown instead and the fields stay editable.
   Future<void> _load() async {
-    final settings = ref.read(settingsRepositoryProvider);
-    final url = await settings.read(SettingsRepository.llmEndpoint);
-    final model = await settings.read(SettingsRepository.llmModel);
-    final key = await ref
-        .read(credentialStoreProvider)
-        .read(CredentialStore.llmApiKeyRef);
-    if (!mounted) return;
-    setState(() {
-      _url.text = url ?? '';
-      _model.text = model ?? '';
-      _key.text = key ?? '';
-      _loading = false;
-    });
+    try {
+      final settings = ref.read(settingsRepositoryProvider);
+      final url = await settings.read(SettingsRepository.llmEndpoint);
+      final model = await settings.read(SettingsRepository.llmModel);
+      final key = await ref
+          .read(credentialStoreProvider)
+          .read(CredentialStore.llmApiKeyRef);
+      if (!mounted) return;
+      setState(() {
+        _url.text = url ?? '';
+        _model.text = model ?? '';
+        _key.text = key ?? '';
+        _loading = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _failed = true;
+        _result = 'Could not read the saved configuration: $error';
+      });
+    }
   }
 
   @override
@@ -185,17 +196,22 @@ class _LlmEndpointScreenState extends ConsumerState<LlmEndpointScreen> {
     final credentials = ref.read(credentialStoreProvider);
 
     try {
-      await _writeOrClear(
-          settings, SettingsRepository.llmEndpoint, _url.text.trim());
-      await _writeOrClear(
-          settings, SettingsRepository.llmModel, _model.text.trim());
-
+      // Key before endpoint, matching how a host is saved. The ordering is
+      // the point: if the keychain write fails, the stored endpoint is still
+      // the old one, so the pair stays consistent. The other order can leave
+      // a new endpoint beside the previous key — and then send that key to a
+      // host it was never issued for.
       final key = _key.text.trim();
       if (key.isEmpty) {
         await credentials.delete(CredentialStore.llmApiKeyRef);
       } else {
         await credentials.write(CredentialStore.llmApiKeyRef, key);
       }
+
+      await _writeOrClear(
+          settings, SettingsRepository.llmEndpoint, _url.text.trim());
+      await _writeOrClear(
+          settings, SettingsRepository.llmModel, _model.text.trim());
 
       ref.invalidate(llmClientProvider);
       if (mounted) Navigator.of(context).pop(true);
