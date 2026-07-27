@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:dartssh2/dartssh2.dart';
@@ -11,10 +10,6 @@ import 'package:mobilecode/features/ssh/host_key_verifier.dart';
 import 'package:mobilecode/features/ssh/ssh_transport.dart';
 import 'package:mobilecode/features/ssh/tmux.dart';
 import 'package:mobilecode/features/ssh/websocket_ssh_socket.dart';
-
-/// Port the Codespaces bridge listens on, quoted in error messages so the
-/// user knows which port to check. Matches tools/codespace-bridge.sh.
-const codespaceBridgePortHint = 2224;
 
 /// Raised when we cannot connect, with a message fit to show the user.
 class SshConnectionException implements Exception {
@@ -63,9 +58,8 @@ class DirectSshTransport implements SshTransport {
   ) async {
     final SSHSocket socket;
     try {
-      // A Codespace has no TCP endpoint — only an HTTPS forwarded port that
-      // accepts a WebSocket upgrade. Swapping the socket is the entire
-      // difference; auth, host key pinning, and tmux handling are identical.
+      // Swapping the socket is the entire difference between a WebSocket host
+      // and a TCP one; auth, host key pinning, and tmux handling are the same.
       socket = host.isWebSocket
           ? await WebSocketSshSocket.connect(
               Uri.parse(host.websocketUrl!),
@@ -116,49 +110,35 @@ class DirectSshTransport implements SshTransport {
     return client;
   }
 
-  /// Turns a transport failure into something that names the likely cause.
-  ///
-  /// "Could not reach X" covers four unrelated situations, and on a WebSocket
-  /// host they need different fixes. Distinguishing them is the difference
-  /// between a two-minute fix and an afternoon of guessing.
+  /// Names the likely cause rather than only reporting that one occurred.
   String _reachabilityMessage(HostConfig host, Object error) {
-    if (!host.isWebSocket) {
-      return 'Could not reach ${host.hostname}:${host.port}. $error';
+    if (host.isWebSocket) {
+      return 'Could not reach ${Uri.parse(host.websocketUrl!).host}. $error';
     }
-
-    final text = error.toString();
-
-    // The endpoint answered but refused to become a WebSocket. Something is
-    // listening — GitHub's proxy — but the bridge behind it is not.
-    if (error is WebSocketException || text.contains('not upgraded')) {
-      return 'The forwarded port answered but did not upgrade to a '
-          'WebSocket. The bridge is probably not running in this Codespace: '
-          'rebuild the container so .devcontainer starts it, or run '
-          'tools/codespace-bridge.sh there. ($error)';
-    }
-
-    if (error is HandshakeException) {
-      return 'TLS failed talking to ${Uri.parse(host.websocketUrl!).host}. '
-          '($error)';
-    }
-
-    // Nothing answered at all — most often the port is not forwarded, or its
-    // visibility is still private rather than public.
-    return 'Could not reach ${Uri.parse(host.websocketUrl!).host}. Check the '
-        'Codespace is running and that port $codespaceBridgePortHint is '
-        'forwarded and set to Public. ($error)';
+    return 'Could not reach ${host.hostname}:${host.port}. $error';
   }
 
-  Future<String?> _passphraseFor(HostConfig host) =>
-      credentials.read(CredentialStore.hostPassphraseRef(host.id));
+  /// Null unless a passphrase was actually stored.
+  ///
+  /// An empty string is not "no passphrase" to dartssh2: `fromPem(pem, '')`
+  /// throws "Passphrase is not required for unencrypted keys". Storage that
+  /// yields '' for a never-written entry would make every unencrypted key
+  /// unreadable, looking like a corrupt key rather than a passphrase problem.
+  Future<String?> _passphraseFor(HostConfig host) async {
+    final stored = await credentials.read(
+      CredentialStore.hostPassphraseRef(host.id),
+    );
+    return (stored == null || stored.isEmpty) ? null : stored;
+  }
 
   List<SSHKeyPair> _parseKey(String pem, String? passphrase) {
     try {
-      return SSHKeyPair.fromPem(pem, passphrase);
+      return SSHKeyPair.fromPem(pem.trim(), passphrase);
     } catch (error) {
+      // Carry the real reason: "could not be read" alone sent us hunting a
+      // malformed key when the key was fine.
       throw SshConnectionException(
-        'That private key could not be read. If it is passphrase-protected, '
-        'check the passphrase.',
+        'That private key could not be read: $error',
         cause: error,
       );
     }

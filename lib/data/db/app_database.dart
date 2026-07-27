@@ -37,10 +37,8 @@ class AppDatabase {
       )
     ''');
 
-    // Deliberately no foreign key to hosts. A Codespace is pinned under an id
-    // derived from its name without ever being a row here — it comes and goes
-    // with GitHub, not with the user's host list — and a Codespace that is
-    // rebuilt and returns must still trip the mismatch check.
+    // Deliberately no foreign key to hosts, so a pin can exist for a host that
+    // is not a row here — transient targets still need their key checked.
     await db.execute('''
       CREATE TABLE known_hosts (
         host_id     TEXT PRIMARY KEY,

@@ -74,19 +74,12 @@ jobs:
 
       # A universal APK rather than --split-per-abi: one file that installs on
       # any phone, which is the point of a build you sideload by hand.
-      # GITHUB_CLIENT_ID identifies the OAuth App for the device flow. Device
-      # flow uses no client *secret*, so this value is not sensitive — it ships
-      # inside the APK either way. It lives in a repo secret only because it is
-      # per-installation. An empty value builds fine; the Codespaces tab then
-      # explains that sign-in is unconfigured rather than failing obscurely.
       - name: Build APK
         run: |
           flutter build apk \
             --${{ inputs.build_mode }} \
-            --build-number=${{ github.run_number }} \
-            --dart-define=GITHUB_CLIENT_ID="$GITHUB_CLIENT_ID"
+            --build-number=${{ github.run_number }}
         env:
-          GITHUB_CLIENT_ID: ${{ secrets.MOBILECODE_GITHUB_CLIENT_ID }}
           MOBILECODE_KEYSTORE_PATH: ${{ steps.keystore.outputs.path }}
           MOBILECODE_KEYSTORE_PASSWORD: ${{ secrets.MOBILECODE_KEYSTORE_PASSWORD }}
           MOBILECODE_KEY_ALIAS: ${{ secrets.MOBILECODE_KEY_ALIAS }}
@@ -124,10 +117,7 @@ jobs:
           flutter build ios \
             --${{ inputs.build_mode }} \
             --no-codesign \
-            --build-number=${{ github.run_number }} \
-            --dart-define=GITHUB_CLIENT_ID="$GITHUB_CLIENT_ID"
-        env:
-          GITHUB_CLIENT_ID: ${{ secrets.MOBILECODE_GITHUB_CLIENT_ID }}
+            --build-number=${{ github.run_number }}
 
       # An .ipa is just a zip with the .app inside a Payload/ directory.
       # `flutter build ipa` refuses without a signing identity, so assemble it

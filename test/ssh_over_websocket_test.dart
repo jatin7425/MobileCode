@@ -10,15 +10,14 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mobilecode/features/ssh/ssh_keygen.dart';
 import 'package:mobilecode/features/ssh/websocket_ssh_socket.dart';
 
-/// End-to-end proof of the Codespaces transport.
-///
-/// This reproduces the exact topology the app will use for a Codespace:
+/// End-to-end proof that the SSH stack works against a real daemon.
 ///
 ///     dartssh2  ->  WebSocketSshSocket  ->  ws bridge  ->  real sshd
 ///
-/// A Codespace's forwarded port is an HTTPS endpoint with a WebSocket upgrade
-/// in front of a listener inside the container. If SSH survives that path
-/// here, the approach is sound; if it does not, no amount of UI work saves it.
+/// This is the project's only coverage against an actual `sshd`: real
+/// authentication with an app-generated key, and real commands over a real
+/// channel. It exercises the WebSocket transport, but everything it proves
+/// about auth and session handling applies to plain TCP hosts too.
 ///
 /// Skips when sshd is unavailable rather than failing, so the suite still runs
 /// on machines without openssh-server.

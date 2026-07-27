@@ -51,7 +51,10 @@ class _HostFormScreenState extends ConsumerState<HostFormScreen> {
       body: Form(
         key: _formKey,
         child: ListView(
-          padding: const EdgeInsets.all(16),
+          // Ends above the system navigation bar. Without this inset the Save
+          // button sits under the gesture bar and cannot be tapped.
+          padding: EdgeInsets.fromLTRB(
+            16, 16, 16, 16 + MediaQuery.viewPaddingOf(context).bottom),
           children: [
             TextFormField(
               controller: _label,

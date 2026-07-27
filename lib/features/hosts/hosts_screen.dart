@@ -26,6 +26,11 @@ class HostsScreen extends ConsumerWidget {
         data: (hosts) => hosts.isEmpty
             ? const _EmptyState()
             : ListView.builder(
+                // Room for the system navigation bar and the floating button,
+                // so the last host is not stuck under either.
+                padding: EdgeInsets.only(
+                  bottom: 88 + MediaQuery.viewPaddingOf(context).bottom,
+                ),
                 itemCount: hosts.length,
                 itemBuilder: (context, index) => _HostTile(host: hosts[index]),
               ),

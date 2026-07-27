@@ -124,6 +124,9 @@ class _AgentPickerScreenState extends ConsumerState<AgentPickerScreen> {
     final installed = _availability.installedFrom(AgentRegistry.all);
 
     return ListView(
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.viewPaddingOf(context).bottom,
+      ),
       children: [
         if (installed.isEmpty) const _NoAgentsNotice(),
         for (final agent in AgentRegistry.all)

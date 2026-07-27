@@ -38,28 +38,6 @@ flutter test
 flutter run          # needs the Android SDK or Xcode
 ```
 
-## Codespaces
-
-The app can open a terminal on a GitHub Codespace as well as on your own
-machines. A Codespace exposes no public SSH endpoint, so this runs SSH inside a
-WebSocket over a forwarded port — see [`docs/CODESPACES.md`](docs/CODESPACES.md)
-for why and how, and `tools/codespace-bridge.sh` for the one-time setup inside
-each Codespace.
-
-Signing in to GitHub uses the OAuth **device flow**, which needs no client
-secret — the right choice for an app that ships to phones. It does need a
-client id, which is per-installation and so cannot be hardcoded:
-
-1. Register a GitHub OAuth App and enable **Device flow** on it.
-2. Build with the id:
-
-```sh
-flutter build apk --release --dart-define=GITHUB_CLIENT_ID=Ov23li...
-```
-
-Without it, the Codespaces tab explains what is missing rather than failing
-mysteriously. The requested scopes are `repo`, `codespace`, and `read:user`.
-
 ## Getting a build onto your phone
 
 Actions → **Build app** → *Run workflow*. Pick `android`, `ios`, or `both` and
