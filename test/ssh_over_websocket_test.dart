@@ -116,8 +116,14 @@ StrictModes no
 LogLevel ERROR
 ''');
 
-    // sshd refuses to start without its privilege separation directory.
-    Directory('/run/sshd').createSync(recursive: true);
+    // sshd wants its privilege separation directory when running as root.
+    // A non-root CI runner cannot create it and does not need it, so a
+    // failure here is not fatal.
+    try {
+      Directory('/run/sshd').createSync(recursive: true);
+    } on FileSystemException {
+      // Not root; sshd will run unprivileged instead.
+    }
 
     final process = await Process.start(
       sshdPath,
