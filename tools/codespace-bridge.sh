@@ -21,10 +21,18 @@ BRIDGE_PORT="${MOBILECODE_BRIDGE_PORT:-2222}"
 SSHD_PORT="${MOBILECODE_SSHD_PORT:-2223}"
 STATE_DIR="$HOME/.mobilecode"
 
+GENERATED_KEY=""
 if [ -z "$PUBLIC_KEY" ]; then
-  echo "usage: $0 '<ssh public key>'" >&2
-  echo "example: $0 \"\$(cat ~/.ssh/id_ed25519.pub)\"" >&2
-  exit 1
+  # No key supplied: mint one dedicated to this app. Better than reusing an
+  # existing key, because revoking it is just removing a line from
+  # authorized_keys and it grants nothing anywhere else.
+  echo "==> No key given; generating one for MobileCode"
+  mkdir -p "$STATE_DIR"
+  if [ ! -f "$STATE_DIR/id_ed25519" ]; then
+    ssh-keygen -q -t ed25519 -N '' -C 'mobilecode' -f "$STATE_DIR/id_ed25519"
+  fi
+  PUBLIC_KEY="$(cat "$STATE_DIR/id_ed25519.pub")"
+  GENERATED_KEY="$STATE_DIR/id_ed25519"
 fi
 
 echo "==> Installing sshd and websocat"
@@ -88,15 +96,31 @@ sleep 1
 if [ -n "${CODESPACE_NAME:-}" ] && command -v gh >/dev/null 2>&1; then
   echo "==> Making port $BRIDGE_PORT public"
   gh codespace ports visibility "$BRIDGE_PORT:public" -c "$CODESPACE_NAME"
-  echo
-  echo "Connect the app to:"
-  echo "  https://$CODESPACE_NAME-$BRIDGE_PORT.app.github.dev"
 else
   echo
   echo "Could not set port visibility automatically. In the Ports panel, set"
   echo "port $BRIDGE_PORT to Public."
 fi
 
+echo
+echo "======================================================================"
+echo "In the app, Settings:"
+echo
+echo "  Username inside the Codespace:  $(whoami)"
+echo
+
+if [ -n "$GENERATED_KEY" ]; then
+  echo "  Private key — copy everything between the BEGIN and END lines:"
+  echo
+  cat "$GENERATED_KEY"
+  echo
+  echo "  This key is authorised only on this Codespace. Remove its line from"
+  echo "  ~/.ssh/authorized_keys to revoke it."
+else
+  echo "  Private key: the half matching the public key you passed in."
+fi
+
+echo "======================================================================"
 echo
 echo "Note: a public forwarded port is reachable by anyone who learns its URL."
 echo "sshd here accepts keys only, so your key is what keeps it shut."
