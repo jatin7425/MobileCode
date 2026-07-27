@@ -149,16 +149,28 @@ class DirectSshTransport implements SshTransport {
         'forwarded and set to Public. ($error)';
   }
 
-  Future<String?> _passphraseFor(HostConfig host) =>
-      credentials.read(CredentialStore.hostPassphraseRef(host.id));
+  /// Null unless a passphrase was actually stored.
+  ///
+  /// An empty string is not "no passphrase" as far as dartssh2 is concerned:
+  /// `fromPem(pem, '')` throws "Passphrase is not required for unencrypted
+  /// keys". Storage that yields '' for a never-written entry would therefore
+  /// make every unencrypted key unreadable, which looks like a corrupt key
+  /// rather than a passphrase problem.
+  Future<String?> _passphraseFor(HostConfig host) async {
+    final stored = await credentials.read(
+      CredentialStore.hostPassphraseRef(host.id),
+    );
+    return (stored == null || stored.isEmpty) ? null : stored;
+  }
 
   List<SSHKeyPair> _parseKey(String pem, String? passphrase) {
     try {
-      return SSHKeyPair.fromPem(pem, passphrase);
+      return SSHKeyPair.fromPem(pem.trim(), passphrase);
     } catch (error) {
+      // Carry the real reason. "Could not be read" alone sent us hunting a
+      // malformed key when the key was fine.
       throw SshConnectionException(
-        'That private key could not be read. If it is passphrase-protected, '
-        'check the passphrase.',
+        'That private key could not be read: $error',
         cause: error,
       );
     }
