@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:mobilecode/app/providers.dart';
-import 'package:mobilecode/features/hosts/hosts_screen.dart';
+import 'package:mobilecode/app/home_shell.dart';
 
 class MobileCodeApp extends ConsumerWidget {
   const MobileCodeApp({super.key});
@@ -15,7 +15,7 @@ class MobileCodeApp extends ConsumerWidget {
       navigatorKey: ref.watch(navigatorKeyProvider),
       theme: _theme(Brightness.light),
       darkTheme: _theme(Brightness.dark),
-      home: const HostsScreen(),
+      home: const HomeShell(),
     );
   }
 

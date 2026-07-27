@@ -9,6 +9,7 @@ import 'package:mobilecode/data/secure/credential_store.dart';
 import 'package:mobilecode/features/ssh/host_key_verifier.dart';
 import 'package:mobilecode/features/ssh/ssh_transport.dart';
 import 'package:mobilecode/features/ssh/tmux.dart';
+import 'package:mobilecode/features/ssh/websocket_ssh_socket.dart';
 
 /// Raised when we cannot connect, with a message fit to show the user.
 class SshConnectionException implements Exception {
@@ -57,14 +58,18 @@ class DirectSshTransport implements SshTransport {
   ) async {
     final SSHSocket socket;
     try {
-      socket = await SSHSocket.connect(
-        host.hostname,
-        host.port,
-        timeout: timeout,
-      );
+      // A Codespace has no TCP endpoint — only an HTTPS forwarded port that
+      // accepts a WebSocket upgrade. Swapping the socket is the entire
+      // difference; auth, host key pinning, and tmux handling are identical.
+      socket = host.isWebSocket
+          ? await WebSocketSshSocket.connect(
+              Uri.parse(host.websocketUrl!),
+              timeout: timeout,
+            )
+          : await SSHSocket.connect(host.hostname, host.port, timeout: timeout);
     } catch (error) {
       throw SshConnectionException(
-        'Could not reach ${host.hostname}:${host.port}.',
+        'Could not reach ${host.displayAddress}.',
         cause: error,
       );
     }

@@ -20,6 +20,14 @@ abstract class CredentialStore {
 
   /// Reference for the GitHub OAuth token.
   static const githubTokenRef = 'github.token';
+
+  /// One private key shared by every Codespace.
+  ///
+  /// Codespaces are disposable and numerous; asking for a key per Codespace
+  /// would mean re-pasting one every time a new machine appears. The setup
+  /// script authorises a single public key, so a single private key is the
+  /// matching shape.
+  static const codespaceKeyRef = 'codespace.key';
 }
 
 /// Platform-backed implementation: iOS Keychain, Android Keystore.
