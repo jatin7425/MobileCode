@@ -16,10 +16,8 @@ class SettingsScreen extends ConsumerStatefulWidget {
 }
 
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
-  final _key = TextEditingController();
   final _username = TextEditingController();
   var _loaded = false;
-  var _hasStoredKey = false;
   var _generating = false;
   String? _publicKey;
 
@@ -31,7 +29,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   @override
   void dispose() {
-    _key.dispose();
     _username.dispose();
     super.dispose();
   }
@@ -47,10 +44,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     if (!mounted) return;
     final hasPrivate = stored != null && stored.isNotEmpty;
     setState(() {
-      _hasStoredKey = hasPrivate;
-      // Never show a public key whose private half is missing. Displaying one
-      // implies a usable key and hides the Generate button behind
-      // "Regenerate", while connecting fails with "no Codespace key".
+      // The public key is the single source of truth for "a key exists", and
+      // it is only set when the private half is present. Showing one without
+      // the other implies a usable key while connecting fails with "no
+      // Codespace key".
       _publicKey = hasPrivate ? pub : null;
       _username.text = ref.read(codespaceUsernameProvider);
       _loaded = true;
@@ -134,6 +131,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         onPressed: _generating ? null : _generate,
                         child: const Text('Regenerate'),
                       ),
+                      TextButton(
+                        onPressed: _clear,
+                        child: const Text('Remove'),
+                      ),
                     ],
                   ),
                 ] else
@@ -159,45 +160,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       .state = value.trim(),
                 ),
                 const SizedBox(height: 16),
-
-                // Kept as an escape hatch for an existing key the user already
-                // trusts on their machines. Generating is the better path, so
-                // it is tucked away rather than presented first.
-                ExpansionTile(
-                  tilePadding: EdgeInsets.zero,
-                  title: Text(
-                    'Or paste an existing private key',
-                    style: theme.textTheme.bodyMedium,
-                  ),
-                  children: [
-                    TextField(
-                      controller: _key,
-                      decoration: InputDecoration(
-                        labelText: 'Private key (PEM)',
-                        helperText: _hasStoredKey
-                            ? 'A key is stored. Paste a new one to replace it.'
-                            : 'Stored in the device keychain, never uploaded.',
-                      ),
-                      maxLines: 5,
-                      autocorrect: false,
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        FilledButton(
-                          onPressed: _save,
-                          child: const Text('Save'),
-                        ),
-                        const SizedBox(width: 12),
-                        if (_hasStoredKey)
-                          TextButton(
-                            onPressed: _clear,
-                            child: const Text('Remove key'),
-                          ),
-                      ],
-                    ),
-                  ],
-                ),
 
                 const Divider(height: 32),
                 const _VersionLine(),
@@ -228,7 +190,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       if (!mounted) return;
       setState(() {
         _publicKey = key.publicKey;
-        _hasStoredKey = true;
         _generating = false;
       });
       messenger.showSnackBar(
@@ -241,53 +202,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     }
   }
 
-  Future<void> _save() async {
-    final messenger = ScaffoldMessenger.of(context);
-    final pasted = _key.text.trim();
-
-    if (pasted.isEmpty) {
-      messenger.showSnackBar(
-        const SnackBar(content: Text('Paste a private key first')),
-      );
-      return;
-    }
-
-    // Public keys are what the user has just been copying around, so pasting
-    // one here is the easy mistake. Storing it produces "that private key
-    // could not be read" at connect time, far from the cause.
-    if (pasted.startsWith('ssh-') || pasted.startsWith('ecdsa-')) {
-      messenger.showSnackBar(
-        const SnackBar(
-          content: Text(
-            'That is a public key. This field wants the private half — the '
-            'block beginning "-----BEGIN".',
-          ),
-        ),
-      );
-      return;
-    }
-
-    if (!pasted.contains('PRIVATE KEY')) {
-      messenger.showSnackBar(
-        const SnackBar(
-          content: Text('That does not look like a private key.'),
-        ),
-      );
-      return;
-    }
-
-    await ref
-        .read(credentialStoreProvider)
-        .write(CredentialStore.codespaceKeyRef, pasted);
-
-    if (!mounted) return;
-    setState(() {
-      _hasStoredKey = true;
-      _key.clear();
-    });
-    messenger.showSnackBar(const SnackBar(content: Text('Key saved')));
-  }
-
   Future<void> _clear() async {
     // Both halves, or the display keeps showing a public key that no longer
     // has a private one behind it.
@@ -295,10 +209,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     await credentials.delete(CredentialStore.codespaceKeyRef);
     await credentials.delete(CredentialStore.codespacePublicKeyRef);
     if (!mounted) return;
-    setState(() {
-      _hasStoredKey = false;
-      _publicKey = null;
-    });
+    setState(() => _publicKey = null);
   }
 }
 
