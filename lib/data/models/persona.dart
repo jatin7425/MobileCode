@@ -79,8 +79,11 @@ class Persona {
 
   /// Seeded on first run so the feature has something to show and the user
   /// can hear a voice before inventing a character of their own.
+  ///
+  /// The first entry is the one the assistant screen speaks through; its id
+  /// must stay in step with `AssistantIdentity.personaId`.
   static const seeds = [
-    Persona(id: 'jarvis', name: 'Jarvis', role: 'Everyday assistant'),
+    Persona(id: 'vikram', name: 'Vikram', role: 'The assistant'),
     Persona(id: 'ops', name: 'Ops', role: 'Build and deploy status'),
     Persona(id: 'alert', name: 'Alert', role: 'Failures and warnings',
         defaultEmotion: 'Fearful'),

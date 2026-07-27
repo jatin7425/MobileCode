@@ -19,6 +19,13 @@ class SettingsRepository {
   /// release can add seeds without resurrecting the ones already deleted.
   static const personasSeeded = 'voice.personas.seeded.v1';
 
+  /// Base URL of an OpenAI-compatible chat endpoint — a LiteLLM proxy, or
+  /// anything that speaks the same shape.
+  static const llmEndpoint = 'llm.endpoint';
+
+  /// Model name to send, e.g. `gpt-4o-mini` or whatever the proxy routes.
+  static const llmModel = 'llm.model';
+
   Future<String?> read(String key) async {
     final rows = await _database.db.query(
       'app_settings',

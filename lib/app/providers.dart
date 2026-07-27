@@ -12,6 +12,8 @@ import 'package:mobilecode/data/secure/credential_store.dart';
 import 'package:mobilecode/features/ssh/direct_ssh_transport.dart';
 import 'package:mobilecode/features/ssh/host_key_verifier.dart';
 import 'package:mobilecode/features/ssh/ssh_transport.dart';
+import 'package:mobilecode/features/assistant/assistant_identity.dart';
+import 'package:mobilecode/features/assistant/llm_client.dart';
 import 'package:mobilecode/features/voice/nvcf_voice_client.dart';
 import 'package:mobilecode/features/voice/voice_catalog.dart';
 
@@ -64,6 +66,51 @@ final voiceClientProvider = FutureProvider<NvcfVoiceClient?>((ref) async {
   final client = NvcfVoiceClient(baseUrl: endpoint, apiKey: key);
   ref.onDispose(client.close);
   return client;
+});
+
+/// Configured chat model, or null until an endpoint is entered.
+final llmClientProvider = FutureProvider<LlmClient?>((ref) async {
+  final settings = ref.watch(settingsRepositoryProvider);
+  final endpoint = await settings.read(SettingsRepository.llmEndpoint);
+  final model = await settings.read(SettingsRepository.llmModel);
+  final key = await ref
+      .watch(credentialStoreProvider)
+      .read(CredentialStore.llmApiKeyRef);
+
+  if (endpoint == null || endpoint.isEmpty) return null;
+  if (model == null || model.isEmpty) return null;
+
+  final client = LlmClient(
+    baseUrl: endpoint,
+    // A local proxy may not check one, and refusing to work without a key
+    // would lock out exactly that setup.
+    apiKey: key ?? '',
+    model: model,
+  );
+  ref.onDispose(client.close);
+  return client;
+});
+
+/// The speaker the assistant talks as.
+///
+/// Resolved from the Vikram persona if one has been assigned, otherwise the
+/// default speaker for whichever locale the catalog offers — so the assistant
+/// has a voice on first run without the user configuring anything.
+final assistantSpeakerProvider = FutureProvider<VoiceSpeaker?>((ref) async {
+  final catalog = await ref.watch(voiceCatalogProvider.future);
+  if (catalog == null) return null;
+
+  final personas = await ref.watch(personasProvider.future);
+  for (final persona in personas) {
+    if (persona.id == AssistantIdentity.personaId && persona.hasVoice) {
+      final assigned = catalog.byKey(persona.voiceKey);
+      if (assigned != null) return assigned;
+    }
+  }
+
+  return catalog.byKey(AssistantIdentity.defaultSpeakerKey) ??
+      catalog.byKey(AssistantIdentity.defaultHindiSpeakerKey) ??
+      (catalog.isEmpty ? null : catalog.speakers.first);
 });
 
 /// Voices the configured endpoint offers.

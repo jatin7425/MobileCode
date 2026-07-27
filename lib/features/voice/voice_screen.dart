@@ -4,6 +4,7 @@ import 'package:uuid/uuid.dart';
 
 import 'package:mobilecode/app/providers.dart';
 import 'package:mobilecode/data/models/persona.dart';
+import 'package:mobilecode/features/assistant/llm_endpoint_screen.dart';
 import 'package:mobilecode/features/voice/voice_catalog.dart';
 import 'package:mobilecode/features/voice/voice_endpoint_screen.dart';
 import 'package:mobilecode/features/voice/voice_picker_screen.dart';
@@ -22,8 +23,13 @@ class VoiceScreen extends ConsumerWidget {
         title: const Text('Voice'),
         actions: [
           IconButton(
+            tooltip: 'Model endpoint',
+            icon: const Icon(Icons.psychology_outlined),
+            onPressed: () => _openModel(context, ref),
+          ),
+          IconButton(
             tooltip: 'Speech endpoint',
-            icon: const Icon(Icons.tune),
+            icon: const Icon(Icons.graphic_eq),
             onPressed: () => _openEndpoint(context, ref),
           ),
         ],
@@ -56,6 +62,12 @@ class VoiceScreen extends ConsumerWidget {
           ],
         ),
       ),
+    );
+  }
+
+  Future<void> _openModel(BuildContext context, WidgetRef ref) async {
+    await Navigator.of(context).push<bool>(
+      MaterialPageRoute(builder: (_) => const LlmEndpointScreen()),
     );
   }
 

@@ -222,7 +222,7 @@ This is cheap now and expensive to retrofit.
 ## 8. Roadmap
 
 The app's minor version tracks the completed phase — 0.1.0 for P1, 0.2.0 for
-P2, 0.4.0 for P4 — with CI substituting its run number as the build number.
+P2, 0.5.0 for P5 — with CI substituting its run number as the build number.
 It stays below 1.0 while P1 remains unverified against a real sshd; the version
 should not claim more than has been proven.
 
@@ -233,8 +233,38 @@ should not claim more than has been proven.
 | **P2** | Agent launch specs, remote detection, accessory bar | done |
 | **P3** | GitHub integration | removed — see below |
 | **P4** | Voice: personas assigned to Magpie TTS speakers | done, unverified against a live endpoint |
-| **P5** | SFTP file browser and editor | not started |
-| **P6** | Biometrics, concurrent sessions, port forwarding, snippets | not started |
+| **P5** | Vikram: the assistant — listen, answer, speak | done, unverified against a live endpoint |
+| **P6** | SFTP file browser and editor | not started |
+| **P7** | Biometrics, concurrent sessions, port forwarding, snippets | not started |
+
+### Vikram (P5)
+
+A full turn: microphone → text → model → `{emotion, text}` → speech → audio.
+The panel is the reactor from the design study, drawn in a single
+`CustomPainter` — forty rotating, glowing widgets would cost far more and
+still not share a centre cleanly.
+
+The controller takes its microphone, model, speech endpoint, and audio device
+through interfaces. That is not ceremony: the failures worth catching here are
+all sequencing — a reply landing after the screen closed, a second tap opening
+the microphone under an in-flight request, a stop that leaves the panel stuck
+on LISTENING — and none of them are reachable through a real device in a test.
+Each turn carries a number; anything returning against a stale one is dropped.
+
+Speech recognition uses the platform recogniser rather than an NVIDIA ASR
+endpoint. It is free, needs no second function ID, and returns partial results,
+which is what lets the transcript appear as the user speaks. On Android it also
+needs a `queries` entry for `android.speech.RecognitionService`, or Android 11's
+package visibility hides every recogniser and the device reports itself as
+incapable rather than asking for permission.
+
+Playback waits for the completion event before the turn ends, so the microphone
+cannot reopen while the speaker is still talking and transcribe the assistant's
+own voice.
+
+The assistant degrades in steps rather than all at once: with no model it still
+listens and says so; with a model but no speech endpoint it answers on screen
+without speaking. Neither is treated as a failed turn.
 
 ### Voice (P4)
 

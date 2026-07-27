@@ -21,6 +21,9 @@ abstract class CredentialStore {
   /// Reference for the speech endpoint's API key. Kept out of the database so
   /// it is not carried into a device backup alongside the endpoint URL.
   static const voiceApiKeyRef = 'voice.nvcf.apiKey';
+
+  /// Reference for the chat model's API key, for the same reason.
+  static const llmApiKeyRef = 'llm.apiKey';
 }
 
 /// Platform-backed implementation: iOS Keychain, Android Keystore.
