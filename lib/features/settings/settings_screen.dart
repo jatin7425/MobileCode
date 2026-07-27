@@ -45,9 +45,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         .read(credentialStoreProvider)
         .read(CredentialStore.codespacePublicKeyRef);
     if (!mounted) return;
+    final hasPrivate = stored != null && stored.isNotEmpty;
     setState(() {
-      _hasStoredKey = stored != null && stored.isNotEmpty;
-      _publicKey = pub;
+      _hasStoredKey = hasPrivate;
+      // Never show a public key whose private half is missing. Displaying one
+      // implies a usable key and hides the Generate button behind
+      // "Regenerate", while connecting fails with "no Codespace key".
+      _publicKey = hasPrivate ? pub : null;
       _username.text = ref.read(codespaceUsernameProvider);
       _loaded = true;
     });
@@ -285,11 +289,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   Future<void> _clear() async {
-    await ref
-        .read(credentialStoreProvider)
-        .delete(CredentialStore.codespaceKeyRef);
+    // Both halves, or the display keeps showing a public key that no longer
+    // has a private one behind it.
+    final credentials = ref.read(credentialStoreProvider);
+    await credentials.delete(CredentialStore.codespaceKeyRef);
+    await credentials.delete(CredentialStore.codespacePublicKeyRef);
     if (!mounted) return;
-    setState(() => _hasStoredKey = false);
+    setState(() {
+      _hasStoredKey = false;
+      _publicKey = null;
+    });
   }
 }
 
