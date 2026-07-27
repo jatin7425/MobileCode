@@ -6,11 +6,9 @@ import 'package:dartssh2/dartssh2.dart';
 
 /// An [SSHSocket] carried over a WebSocket instead of a raw TCP connection.
 ///
-/// This exists because GitHub Codespaces exposes no public SSH endpoint. Its
-/// forwarded ports are HTTPS URLs served through GitHub's tunnel
-/// infrastructure, so there is no host and port for a TCP socket to dial. What
-/// those URLs *do* accept is a WebSocket upgrade — and since SSH only needs an
-/// ordered, reliable byte stream, running it inside one works.
+/// For hosts that expose no TCP endpoint — only an HTTPS URL that accepts a
+/// WebSocket upgrade. SSH needs an ordered, reliable byte stream and nothing
+/// more, so it runs inside a WebSocket perfectly well.
 ///
 /// Message boundaries are irrelevant here. SSH frames itself, and dartssh2's
 /// transport reassembles from a byte stream, so a WebSocket message carrying

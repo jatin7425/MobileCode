@@ -39,9 +39,9 @@ class HostConfig {
   /// When set, reach this host over a WebSocket at this URL instead of a TCP
   /// connection to [hostname]:[port].
   ///
-  /// This exists for Codespaces, which expose no TCP endpoint at all — their
-  /// forwarded ports are HTTPS URLs. Everything else about the connection is
-  /// identical, so the transport swaps the socket and changes nothing else.
+  /// For hosts reachable only over HTTPS with a WebSocket upgrade rather than
+  /// a raw TCP port. Everything else about the connection is identical, so the
+  /// transport swaps the socket and changes nothing else.
   final String? websocketUrl;
 
   bool get isWebSocket => websocketUrl != null && websocketUrl!.isNotEmpty;

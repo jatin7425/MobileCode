@@ -1,8 +1,8 @@
 # MobileCode — Architecture
 
 Code from your phone. MobileCode is a Flutter app (iOS + Android) that connects
-over SSH to machines you already own — a dev box, a VPS, a work laptop, a
-Codespace — and drives the coding CLI agents installed there (`claude`,
+over SSH to machines you already own — a dev box, a VPS, a work laptop — and
+drives the coding CLI agents installed there (`claude`,
 `codex`, `gemini`, and friends) through a terminal built for a small screen.
 
 ## 1. Shape of the system
@@ -14,22 +14,18 @@ Codespace — and drives the coding CLI agents installed there (`claude`,
 │  Terminal (xterm.dart)   │◄──SSH─────►│  sshd                         │
 │  Session manager         │  (direct,  │   └── tmux: mobilecode-<id>   │
 │  Secure key store        │   no relay)│        └── claude / codex /   │
-│  GitHub API client       │            │             gemini CLI        │
-└───────────┬──────────────┘            │        └── git, build, tests  │
-            │                           └───────────────────────────────┘
-            └────── HTTPS ──────► api.github.com
+└──────────────────────────┘            │             gemini CLI        │
+                                        │        └── git, build, tests  │
+                                        └───────────────────────────────┘
 ```
 
-Two independent links, deliberately:
+One link, deliberately: SSH from the phone to your host, carrying the terminal,
+the agent, and every git operation that touches code. No third-party server
+sits in the middle.
 
-- **SSH, phone → your host.** Carries the terminal, the agent, and all git
-  operations that touch code. No third-party server sits in the middle.
-- **HTTPS, phone → GitHub.** Read-only-ish metadata: repo list, PRs, issues,
-  notifications, review comments. Never used to move code.
-
-The split matters. Cloning, committing, and pushing happen *on the host*, which
-already has credentials and disk. The phone never becomes a git client, so we
-never have to solve "large repo on a metered connection with 4 GB of storage."
+Cloning, committing, and pushing happen *on the host*, which already has
+credentials and disk. The phone never becomes a git client, so we never have to
+solve "large repo on a metered connection with 4 GB of storage."
 
 ## 2. Decisions and why
 
@@ -145,7 +141,6 @@ actual user need without it.
 |---|---|
 | SSH private keys | Platform secure storage, device-only |
 | Provider API keys | Platform secure storage, device-only |
-| GitHub OAuth token | Platform secure storage |
 | Host name/address/port/user | Local database — not secret |
 | Host key fingerprints | Local database, pinned |
 
@@ -236,9 +231,28 @@ should not claim more than has been proven.
 | **P0** | Scaffold: app boots, navigation, storage layer, models | done |
 | **P1** | SSH + terminal + tmux — add a host, open a shell, reattach after backgrounding | code complete, unverified on a device |
 | **P2** | Agent launch specs, remote detection, accessory bar | done |
-| **P3** | GitHub device-flow OAuth, Codespaces over a WebSocket | done; live Codespace round trip unverified |
+| **P3** | GitHub integration | removed — see below |
 | **P4** | SFTP file browser and editor | not started |
 | **P5** | Biometrics, concurrent sessions, port forwarding, snippets | not started |
+
+### Codespaces, removed
+
+A GitHub Codespaces integration was built and then taken out: sign-in by
+device flow, listing and starting Codespaces, and SSH tunnelled over a
+WebSocket through a forwarded port, since a Codespace exposes no SSH endpoint
+of its own.
+
+The transport worked — SSH reached a Codespace through GitHub's tunnel from a
+phone. What made it not worth keeping was the setup around it: a bridge
+process and an authorised key inside each Codespace, which in turn needs
+`.devcontainer` config committed to every repository you want reachable. VS
+Code avoids all of that by using its own protocol over Dev Tunnels, authorised
+by a GitHub token rather than SSH keys — reproducing that means implementing
+an undocumented protocol with no Dart SDK.
+
+The code is in the history if it is ever wanted. `WebSocketSshSocket` and
+`SshKeygen` survive: both are general SSH capabilities, and the integration
+test built on them is the project's only coverage against a real `sshd`.
 
 P1 is the milestone that proves the product, and it is the next thing to
 confirm: the code paths exist and are unit-tested, but nothing has yet run
