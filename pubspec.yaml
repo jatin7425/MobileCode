@@ -41,6 +41,14 @@ dependencies:
   sqflite: ^2.4.3
   path: ^1.9.1
   uuid: ^4.6.0
+
+dependency_overrides:
+  # jni 1.0.1 applies the Kotlin plugin only when AGP major < 9 but calls
+  # kotlin { } unconditionally; the Flutter 3.44 template pins AGP 9.0.1, so
+  # configuring :jni fails. path_provider_android 2.2.23 is the last release
+  # before that migration and still satisfies path_provider's ^2.2.5.
+  path_provider_android: 2.2.23
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
