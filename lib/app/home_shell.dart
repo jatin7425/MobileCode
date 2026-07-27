@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'package:mobilecode/features/assistant/assistant_identity.dart';
+import 'package:mobilecode/features/assistant/assistant_screen.dart';
 import 'package:mobilecode/features/hosts/hosts_screen.dart';
 import 'package:mobilecode/features/settings/settings_screen.dart';
 
@@ -16,6 +18,7 @@ class _HomeShellState extends State<HomeShell> {
 
   static const _screens = [
     HostsScreen(),
+    AssistantScreen(),
     SettingsScreen(),
   ];
 
@@ -32,6 +35,11 @@ class _HomeShellState extends State<HomeShell> {
             icon: Icon(Icons.dns_outlined),
             selectedIcon: Icon(Icons.dns),
             label: 'Hosts',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.blur_circular_outlined),
+            selectedIcon: Icon(Icons.blur_circular),
+            label: AssistantIdentity.properName,
           ),
           NavigationDestination(
             icon: Icon(Icons.settings_outlined),

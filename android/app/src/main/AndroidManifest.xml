@@ -7,6 +7,9 @@
          a missing permission. -->
     <uses-permission android:name="android.permission.INTERNET"/>
 
+    <!-- The assistant listens through the platform recogniser. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO"/>
+
     <application
         android:label="MobileCode"
         android:name="${applicationName}"
@@ -48,6 +51,12 @@
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
+        </intent>
+        <!-- Android 11 hides other packages by default, so without this the
+             speech plugin finds no recogniser and reports the device as
+             incapable rather than asking for permission. -->
+        <intent>
+            <action android:name="android.speech.RecognitionService"/>
         </intent>
     </queries>
 </manifest>

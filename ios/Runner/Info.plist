@@ -66,5 +66,9 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Vikram listens through the microphone so you can speak to it instead of typing.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Speech recognition turns what you say into text for the assistant to answer.</string>
 </dict>
 </plist>
