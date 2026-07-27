@@ -36,6 +36,10 @@ class VoiceSpeaker {
   VoiceId get defaultVoice =>
       _byEmotion[_neutral] ?? _byEmotion[null] ?? _byEmotion.values.first;
 
+  /// The mood this speaker falls back to, or null when it ships none.
+  String? get defaultEmotionName =>
+      emotions.isEmpty ? null : (_byEmotion.containsKey(_neutral) ? _neutral : emotions.first);
+
   String get languageCode => defaultVoice.languageCode;
 
   static const _neutral = 'Neutral';

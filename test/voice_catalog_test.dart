@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -9,7 +10,24 @@ import 'package:mobilecode/features/voice/voice_id.dart';
 
 /// Names copied from a live `list_voices` response, so the parser is tested
 /// against what the endpoint actually returns rather than what the docs say.
+///
+/// Two things here that documentation does not prepare you for: a speaker can
+/// be listed both bare and with emotions (`Ray` and `Ray.Neutral`), and the
+/// emotion set differs per speaker — Ray has five, Phung six, Long seven.
 const _live = [
+  'Magpie-Multilingual.HI-IN.Ray',
+  'Magpie-Multilingual.HI-IN.Ray.Neutral',
+  'Magpie-Multilingual.HI-IN.Ray.Calm',
+  'Magpie-Multilingual.HI-IN.Ray.Angry',
+  'Magpie-Multilingual.HI-IN.Ray.Happy',
+  'Magpie-Multilingual.HI-IN.Ray.Fearful',
+  'Magpie-Multilingual.HI-IN.Long.Neutral',
+  'Magpie-Multilingual.HI-IN.Long.Angry',
+  'Magpie-Multilingual.HI-IN.Long.Calm',
+  'Magpie-Multilingual.HI-IN.Long.Disgusted',
+  'Magpie-Multilingual.HI-IN.Long.Fearful',
+  'Magpie-Multilingual.HI-IN.Long.Happy',
+  'Magpie-Multilingual.HI-IN.Long.Sad',
   'Magpie-Multilingual.HI-IN.Phung.Neutral',
   'Magpie-Multilingual.HI-IN.Phung.Angry',
   'Magpie-Multilingual.HI-IN.Phung.Disgusted',
@@ -74,16 +92,45 @@ void main() {
     test('collapses emotional variants into one speaker', () {
       final catalog = VoiceCatalog.fromNames(_live);
 
-      // Phung ×6, Jason HI-IN ×1, Jason EN-US ×2 => three speakers.
-      expect(catalog.speakers, hasLength(3));
+      // Ray, Long, Phung, Jason in HI-IN, and Jason again in EN-US.
+      expect(catalog.speakers, hasLength(5));
       expect(catalog.voiceCount, _live.length);
+    });
+
+    test('groups a bare speaker name with its own emotional variants', () {
+      final ray =
+          VoiceCatalog.fromNames(_live).byKey('Magpie-Multilingual.HI-IN.Ray')!;
+
+      // `Ray` and `Ray.Neutral` are both listed; they are one speaker, and the
+      // bare entry must not appear in the mood list.
+      expect(ray.emotions, ['Neutral', 'Angry', 'Calm', 'Fearful', 'Happy']);
+      expect(ray.emotions, isNot(contains('')));
+      expect(ray.emotions, isNot(contains(null)));
+    });
+
+    test('keeps each speaker to the moods it actually ships', () {
+      final catalog = VoiceCatalog.fromNames(_live);
+
+      // The sets genuinely differ, so nothing may assume a fixed enum.
+      expect(catalog.byKey('Magpie-Multilingual.HI-IN.Ray')!.emotions,
+          hasLength(5));
+      expect(catalog.byKey('Magpie-Multilingual.HI-IN.Phung')!.emotions,
+          hasLength(6));
+      expect(catalog.byKey('Magpie-Multilingual.HI-IN.Long')!.emotions,
+          hasLength(7));
+
+      // Ray has no Sad and Phung has no Calm.
+      expect(catalog.byKey('Magpie-Multilingual.HI-IN.Ray')!.emotions,
+          isNot(contains('Sad')));
+      expect(catalog.byKey('Magpie-Multilingual.HI-IN.Phung')!.emotions,
+          isNot(contains('Calm')));
     });
 
     test('treats the same speaker in two locales as two entries', () {
       final catalog = VoiceCatalog.fromNames(_live);
 
       expect(catalog.inLocale('HI-IN').map((s) => s.speaker),
-          containsAll(['Phung', 'Jason']));
+          containsAll(['Phung', 'Jason', 'Ray', 'Long']));
       expect(catalog.inLocale('EN-US').map((s) => s.speaker), ['Jason']);
     });
 
@@ -159,6 +206,89 @@ void main() {
       );
 
       expect(parseVoiceNames(json), hasLength(1));
+    });
+  });
+
+  /// Runs against a verbatim capture of a live `list_voices` response.
+  ///
+  /// The value of this fixture is the things nobody would invent: two
+  /// spellings of the same mood, a mood called PleasantSurprised, speakers
+  /// with no moods at all, and a payload nested under a key that lists every
+  /// locale at once.
+  group('the real endpoint response', () {
+    final catalog = VoiceCatalog.fromNames(
+      parseVoiceNames(
+        jsonDecode(
+          File('test/fixtures/list_voices_response.json').readAsStringSync(),
+        ),
+      ),
+    );
+
+    test('is found under a key naming every locale at once', () {
+      expect(catalog.isEmpty, isFalse);
+      expect(catalog.locales, [
+        'DE-DE', 'EN-US', 'ES-US', 'FR-FR', 'HI-IN',
+        'IT-IT', 'JA-JP', 'VI-VN', 'ZH-CN',
+      ]);
+    });
+
+    test('finds every Hindi speaker, not just the documented five', () {
+      expect(
+        catalog.inLocale('HI-IN').map((s) => s.speaker).toList()..sort(),
+        [
+          'Aria', 'Diego', 'HouZhen', 'Isabela', 'Jason', 'Leo', 'Long',
+          'Mia', 'Pascal', 'Phung', 'Ray', 'Siwei', 'Sofia',
+        ],
+      );
+    });
+
+    test('keeps both spellings of disgust apart', () {
+      // NVIDIA ships `Disgust` on Pascal and Diego but `Disgusted` on Long and
+      // Phung. Normalising them would synthesise a voice name that 404s, so
+      // each speaker keeps whichever spelling it was listed with.
+      expect(catalog.byKey('Magpie-Multilingual.HI-IN.Pascal')!.emotions,
+          contains('Disgust'));
+      expect(catalog.byKey('Magpie-Multilingual.HI-IN.Long')!.emotions,
+          contains('Disgusted'));
+      expect(catalog.byKey('Magpie-Multilingual.HI-IN.Pascal')!.emotions,
+          isNot(contains('Disgusted')));
+    });
+
+    test('carries moods no fixed enum would have included', () {
+      expect(catalog.byKey('Magpie-Multilingual.HI-IN.Isabela')!.emotions,
+          contains('PleasantSurprised'));
+    });
+
+    test('handles speakers that ship no moods at all', () {
+      final houZhen = catalog.byKey('Magpie-Multilingual.HI-IN.HouZhen')!;
+
+      expect(houZhen.emotions, isEmpty);
+      expect(houZhen.hasEmotions, isFalse);
+      expect(houZhen.defaultEmotionName, isNull);
+      // Still speakable — it just has one take.
+      expect(houZhen.forEmotion(null).name, 'Magpie-Multilingual.HI-IN.HouZhen');
+    });
+
+    test('mood counts differ per speaker', () {
+      int moods(String speaker) =>
+          catalog.byKey('Magpie-Multilingual.HI-IN.$speaker')!.emotions.length;
+
+      expect(moods('Jason'), 4);
+      expect(moods('Ray'), 5);
+      expect(moods('Pascal'), 6);
+      expect(moods('Long'), 7);
+    });
+
+    test('de-duplicates the repeated block in the response', () {
+      // The payload lists ZH-CN.HouZhen, FR-FR.Pascal and others twice.
+      final raw = jsonDecode(
+        File('test/fixtures/list_voices_response.json').readAsStringSync(),
+      ) as Map<String, Object?>;
+      final listed =
+          ((raw.values.first as Map)['voices'] as List).length;
+
+      expect(catalog.voiceCount, lessThan(listed),
+          reason: 'duplicates must collapse');
     });
   });
 
