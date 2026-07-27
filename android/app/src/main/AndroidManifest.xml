@@ -1,6 +1,14 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Flutter's template declares INTERNET only in the debug and profile
+         manifests, for the dev tooling's own connection. A release build
+         inherits none of that, so without this line the shipped app has no
+         network at all: SSH, the agent probe, and GitHub sign-in all fail
+         with a DNS lookup error that looks like a broken network rather than
+         a missing permission. -->
+    <uses-permission android:name="android.permission.INTERNET"/>
+
     <application
-        android:label="mobilecode"
+        android:label="MobileCode"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity
