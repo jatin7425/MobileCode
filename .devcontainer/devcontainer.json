@@ -12,7 +12,10 @@
   "portsAttributes": {
     "2224": {
       "label": "MobileCode SSH bridge",
-      "onAutoForward": "silent"
+      "onAutoForward": "silent",
+      // Codespaces honours this; the script also sets it via gh as a fallback
+      // for environments that ignore the key.
+      "visibility": "public"
     }
   },
   "forwardPorts": [2224]
