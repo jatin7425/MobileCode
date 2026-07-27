@@ -257,8 +257,14 @@ Two decisions worth recording:
 
 The endpoint URL lives in `app_settings`; the API key lives in the credential
 store, because the database ends up in a device backup and the key must not.
-`LINEAR_PCM` responses are headerless, so `wrapPcmAsWav` prefixes a RIFF header
-before playback — without it every clip is silence.
+
+`LINEAR_PCM` responses arrive headerless, so `wrapPcmAsWav` prefixes a RIFF
+header before playback; a response that already carries one passes through
+untouched. Unwrapped, a player either rejects the bytes outright or renders
+silence. Synthesis requests default to the voice's own render rate — 22.05 kHz
+for Magpie — because the requested rate is also written into that header, and
+a mismatch plays the clip at the wrong speed if the server returns native audio
+rather than resampling.
 
 ### Codespaces, removed
 

@@ -180,8 +180,13 @@ class _VoicePickerScreenState extends ConsumerState<VoicePickerScreen> {
   /// it fires only on an explicit tap — never automatically as the list
   /// scrolls or the selection changes.
   Future<void> _preview(VoiceSpeaker speaker) async {
+    // One at a time. Two in flight would race on the same player, and
+    // whichever finished first would clear the spinner on the row that is
+    // still loading. It also stops a double-tap costing two credits.
+    if (_previewing != null) return;
+
     final client = await ref.read(voiceClientProvider.future);
-    if (client == null) return;
+    if (client == null || !mounted) return;
 
     setState(() {
       _previewing = speaker.key;
@@ -194,6 +199,9 @@ class _VoicePickerScreenState extends ConsumerState<VoicePickerScreen> {
         text: _sampleFor(speaker.locale),
         voice: speaker.forEmotion(mood),
       );
+      // dispose() closes the player, so a request that outlives the screen
+      // must not touch it.
+      if (!mounted) return;
       await _player.stop();
       await _player.play(BytesSource(audio));
     } catch (error) {

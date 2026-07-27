@@ -15,6 +15,10 @@ class SettingsRepository {
   /// `https://<uuid>.invocation.api.nvcf.nvidia.com`.
   static const voiceEndpoint = 'voice.endpoint';
 
+  /// Set once the starter personas have been written. Versioned so a future
+  /// release can add seeds without resurrecting the ones already deleted.
+  static const personasSeeded = 'voice.personas.seeded.v1';
+
   Future<String?> read(String key) async {
     final rows = await _database.db.query(
       'app_settings',

@@ -79,12 +79,18 @@ class NvcfVoiceClient {
   }
 
   /// Renders [text] and returns playable WAV bytes.
+  ///
+  /// [sampleRateHz] defaults to the voice's own render rate. The requested
+  /// rate is also written into the WAV header, so the two must agree — see
+  /// [VoiceId.nativeSampleRateHz] for why asking for anything else is a
+  /// gamble on the server resampling.
   Future<Uint8List> synthesize({
     required String text,
     required VoiceId voice,
     String? languageCode,
-    int sampleRateHz = 44100,
+    int? sampleRateHz,
   }) async {
+    final rate = sampleRateHz ?? voice.nativeSampleRateHz;
     final uri = Uri.parse('$baseUrl/v1/audio/synthesize');
     final request = http.MultipartRequest('POST', uri)
       ..headers.addAll(_authHeader)
@@ -92,7 +98,7 @@ class NvcfVoiceClient {
       ..fields['language'] = languageCode ?? voice.languageCode
       ..fields['voice'] = voice.name
       ..fields['encoding'] = 'LINEAR_PCM'
-      ..fields['sample_rate_hz'] = '$sampleRateHz';
+      ..fields['sample_rate_hz'] = '$rate';
 
     late final http.Response response;
     try {
@@ -107,7 +113,7 @@ class NvcfVoiceClient {
     if (response.bodyBytes.isEmpty) {
       throw VoiceServiceException('The endpoint returned no audio.');
     }
-    return wrapPcmAsWav(response.bodyBytes, sampleRateHz: sampleRateHz);
+    return wrapPcmAsWav(response.bodyBytes, sampleRateHz: rate);
   }
 
   void _throwOnFailure(http.Response response, String action) {

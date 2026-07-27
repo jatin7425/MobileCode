@@ -93,11 +93,33 @@ class VoiceScreen extends ConsumerWidget {
     ref.invalidate(personasProvider);
   }
 
+  /// Confirms first: deleting is one tap on a small icon, it cannot be undone,
+  /// and the seeded personas cannot be recreated with their original settings
+  /// once they are gone.
   Future<void> _deletePersona(
     BuildContext context,
     WidgetRef ref,
     Persona persona,
   ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Delete ${persona.name}?'),
+        content: const Text('The persona and its voice assignment are removed.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
     await ref.read(personaRepositoryProvider).delete(persona.id);
     ref.invalidate(personasProvider);
   }

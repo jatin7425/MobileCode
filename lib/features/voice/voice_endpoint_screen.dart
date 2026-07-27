@@ -184,17 +184,29 @@ class _VoiceEndpointScreenState extends ConsumerState<VoiceEndpointScreen> {
     final url = _url.text.trim();
     final key = _key.text.trim();
 
-    if (url.isEmpty) {
-      await settings.delete(SettingsRepository.voiceEndpoint);
-    } else {
-      await settings.write(SettingsRepository.voiceEndpoint, url);
+    // The keychain can refuse a write — a locked device, a wiped Keystore
+    // entry. Without this the spinner would run forever with both buttons
+    // disabled, and the only escape would be leaving the screen.
+    try {
+      if (url.isEmpty) {
+        await settings.delete(SettingsRepository.voiceEndpoint);
+      } else {
+        await settings.write(SettingsRepository.voiceEndpoint, url);
+      }
+      if (key.isEmpty) {
+        await credentials.delete(CredentialStore.voiceApiKeyRef);
+      } else {
+        await credentials.write(CredentialStore.voiceApiKeyRef, key);
+      }
+      if (mounted) Navigator.of(context).pop(true);
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _failed = true;
+        _result = 'Could not save: $error';
+      });
+    } finally {
+      if (mounted) setState(() => _busy = false);
     }
-    if (key.isEmpty) {
-      await credentials.delete(CredentialStore.voiceApiKeyRef);
-    } else {
-      await credentials.write(CredentialStore.voiceApiKeyRef, key);
-    }
-
-    if (mounted) Navigator.of(context).pop(true);
   }
 }

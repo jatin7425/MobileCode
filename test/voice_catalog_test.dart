@@ -80,6 +80,21 @@ void main() {
           'en-US');
     });
 
+    test('leaves a legacy display name alone instead of faking a tag', () {
+      // `English-US` is a name, not a code. Reformatting it yields
+      // `english-US`, which the endpoint rejects.
+      expect(VoiceId.parse('English-US.Female-1').languageCode, 'english-us');
+    });
+
+    test('reports the rate its model renders at', () {
+      expect(
+        VoiceId.parse('Magpie-Multilingual.HI-IN.Phung.Sad').nativeSampleRateHz,
+        22050,
+        reason: 'Magpie renders at 22.05 kHz',
+      );
+      expect(VoiceId.parse('English-US.Female-1').nativeSampleRateHz, 44100);
+    });
+
     test('rebuilds the full name when swapping emotion', () {
       final angry = VoiceId.parse('Magpie-Multilingual.HI-IN.Phung.Neutral')
           .withEmotion('Angry');

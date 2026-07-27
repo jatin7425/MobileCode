@@ -17,7 +17,8 @@ Future<void> main() async {
   final database = await AppDatabase.open();
   final credentials = SecureCredentialStore();
   final personas = SqlitePersonaRepository(database);
-  await _seedPersonas(personas);
+  final settings = SettingsRepository(database);
+  await _seedPersonas(personas, settings);
 
   runApp(
     ProviderScope(
@@ -30,9 +31,7 @@ Future<void> main() async {
           SqliteKnownHostRepository(database),
         ),
         personaRepositoryProvider.overrideWithValue(personas),
-        settingsRepositoryProvider.overrideWithValue(
-          SettingsRepository(database),
-        ),
+        settingsRepositoryProvider.overrideWithValue(settings),
       ],
       child: const MobileCodeApp(),
     ),
@@ -41,11 +40,17 @@ Future<void> main() async {
 
 /// Puts the starter personas in place on first run.
 ///
-/// Guarded on the table being empty rather than a "seeded" flag: seeding
-/// unconditionally would resurrect personas the user deleted on every launch.
-Future<void> _seedPersonas(PersonaRepository repository) async {
-  if ((await repository.list()).isNotEmpty) return;
+/// Guarded on a stored marker rather than on the table being empty: a user who
+/// deletes every persona has expressed a preference, and an emptiness check
+/// would undo it by restoring all three on the next launch. The marker is
+/// written last, so a crash mid-seed retries instead of leaving a partial set.
+Future<void> _seedPersonas(
+  PersonaRepository repository,
+  SettingsRepository settings,
+) async {
+  if (await settings.read(SettingsRepository.personasSeeded) != null) return;
   for (final persona in Persona.seeds) {
     await repository.save(persona);
   }
+  await settings.write(SettingsRepository.personasSeeded, 'true');
 }

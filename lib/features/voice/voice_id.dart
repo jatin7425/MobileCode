@@ -86,11 +86,26 @@ class VoiceId {
 
   /// The BCP-47-ish language tag the synthesize endpoint wants, derived from
   /// the locale segment: `HI-IN` becomes `hi-IN`.
+  ///
+  /// Riva's legacy voices carry a display name rather than a code in that
+  /// position (`English-US.Female-1`), and reformatting one produces
+  /// `english-US`, which the endpoint rejects. An ISO 639 language subtag is
+  /// two or three letters, so anything longer is left alone.
   String get languageCode {
     final parts = locale.split('-');
-    if (parts.length != 2) return locale.toLowerCase();
+    if (parts.length != 2 || parts[0].length > 3) return locale.toLowerCase();
     return '${parts[0].toLowerCase()}-${parts[1].toUpperCase()}';
   }
+
+  /// The rate this voice's model actually renders at.
+  ///
+  /// Magpie renders at 22.05 kHz. Asking for a different rate and then
+  /// stamping that number into the WAV header is only safe if the server
+  /// resamples; if it returns native audio instead, the header misdescribes
+  /// it and the clip plays at the wrong speed. Requesting the native rate is
+  /// correct either way.
+  int get nativeSampleRateHz =>
+      family.startsWith('Magpie') ? 22050 : 44100;
 
   @override
   String toString() => name;
