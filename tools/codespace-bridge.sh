@@ -101,29 +101,37 @@ pkill -F "$STATE_DIR/sshd.pid" 2>/dev/null || true
 sudo "$(command -v sshd || echo /usr/sbin/sshd)" -f "$STATE_DIR/sshd_config"
 
 echo "==> Starting WebSocket bridge on :$BRIDGE_PORT"
+
+# Clear any previous bridge, including one started as root. A survivor holds
+# the port, the new websocat dies with "Address in use", and the port stays
+# listening — so the failure then looks like a GitHub problem rather than a
+# stale process.
 pkill -f 'websocat .*ws-l' 2>/dev/null || true
+sudo pkill -f 'websocat .*ws-l' 2>/dev/null || true
+sleep 1
+
+if (command -v ss >/dev/null 2>&1 && ss -ltn 2>/dev/null | grep -q ":$BRIDGE_PORT "); then
+  echo >&2
+  echo "Port $BRIDGE_PORT is already held by something that is not our" >&2
+  echo "bridge. Identify and stop it, then run this again:" >&2
+  echo >&2
+  echo "  sudo ss -ltnp | grep $BRIDGE_PORT" >&2
+  exit 1
+fi
+
 nohup websocat --binary \
   "ws-l:0.0.0.0:$BRIDGE_PORT" \
   "tcp:127.0.0.1:$SSHD_PORT" \
   >"$STATE_DIR/websocat.log" 2>&1 &
+bridge_pid=$!
 
-# Confirm the bridge is actually listening before going further. If websocat
-# died — a bad download, a port already taken — GitHub never forwards the
-# port, and the visibility call then fails with a 404 that looks like a
-# GitHub problem rather than a dead process.
-listening=""
-for _ in $(seq 1 10); do
-  if (command -v ss >/dev/null 2>&1 && ss -ltn 2>/dev/null | grep -q ":$BRIDGE_PORT ") ||
-     (command -v netstat >/dev/null 2>&1 && netstat -ltn 2>/dev/null | grep -q ":$BRIDGE_PORT "); then
-    listening=yes
-    break
-  fi
-  sleep 1
-done
-
-if [ -z "$listening" ]; then
+# Check that *our* websocat is alive, not merely that the port is bound.
+# Checking the port alone passes on someone else's socket — which is exactly
+# how a dead bridge behind a squatted port reported success.
+sleep 2
+if ! kill -0 "$bridge_pid" 2>/dev/null; then
   echo >&2
-  echo "The bridge is not listening on $BRIDGE_PORT. websocat log:" >&2
+  echo "The bridge exited immediately. websocat log:" >&2
   tail -20 "$STATE_DIR/websocat.log" >&2 2>/dev/null || true
   exit 1
 fi
