@@ -1,0 +1,19 @@
+{
+  "name": "MobileCode",
+  "image": "mcr.microsoft.com/devcontainers/universal:2",
+
+  // Runs on every start, including after a stop/resume — not just on create,
+  // because the bridge is a process and does not survive the Codespace being
+  // stopped. Backgrounded so a slow setup never blocks the Codespace opening.
+  "postStartCommand": "nohup bash .devcontainer/start-bridge.sh > /tmp/mobilecode-bridge.log 2>&1 &",
+
+  // Marking the port public here means the app can reach it without anyone
+  // opening the Ports panel. sshd behind it accepts keys only.
+  "portsAttributes": {
+    "2222": {
+      "label": "MobileCode SSH bridge",
+      "onAutoForward": "silent"
+    }
+  },
+  "forwardPorts": [2222]
+}

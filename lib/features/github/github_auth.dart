@@ -36,6 +36,10 @@ class GithubAuthController extends ChangeNotifier {
 
   Timer? _poller;
 
+  /// When the device code stops being valid. Transient poll failures are
+  /// retried until this passes.
+  DateTime? _expiresAt;
+
   bool get isConfigured => deviceFlow.isConfigured;
 
   /// Loads a previously stored token, if any.
@@ -53,6 +57,7 @@ class GithubAuthController extends ChangeNotifier {
 
     try {
       final grant = this.grant = await deviceFlow.requestCode();
+      _expiresAt = DateTime.now().add(grant.expiresIn);
       _set(GithubAuthStatus.awaitingUser);
       _schedulePoll(grant, grant.interval);
     } catch (error) {
@@ -91,9 +96,22 @@ class GithubAuthController extends ChangeNotifier {
             errorMessage = 'Access was declined on GitHub.';
             _set(GithubAuthStatus.failed);
         }
-      } catch (error) {
+      } on GithubAuthException catch (error) {
+        // GitHub answered and said no. That is final.
         errorMessage = error.toString();
         _set(GithubAuthStatus.failed);
+      } catch (error) {
+        // A transport failure — connection abort, DNS blip, signal lost.
+        // Over a fifteen-minute polling window on a phone this is ordinary,
+        // not exceptional, and abandoning sign-in over one dropped request
+        // would make the flow unusable on a moving train. Keep polling until
+        // the code itself expires.
+        if (_expiresAt != null && DateTime.now().isAfter(_expiresAt!)) {
+          errorMessage = 'The code expired. Start again.';
+          _set(GithubAuthStatus.failed);
+        } else {
+          _schedulePoll(grant, interval);
+        }
       }
     });
   }

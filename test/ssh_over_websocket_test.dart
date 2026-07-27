@@ -7,6 +7,7 @@ import 'dart:io';
 import 'package:dartssh2/dartssh2.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:mobilecode/features/ssh/ssh_keygen.dart';
 import 'package:mobilecode/features/ssh/websocket_ssh_socket.dart';
 
 /// End-to-end proof of the Codespaces transport.
@@ -83,20 +84,19 @@ class _SshdFixture {
   static Future<_SshdFixture> start(String sshdPath) async {
     final dir = Directory.systemTemp.createTempSync('mobilecode-sshd');
     final hostKey = '${dir.path}/host_ed25519';
-    final clientKey = '${dir.path}/client_ed25519';
-
-    for (final key in [hostKey, clientKey]) {
-      final result = await Process.run(
-        'ssh-keygen',
-        ['-q', '-t', 'ed25519', '-N', '', '-f', key],
-      );
-      if (result.exitCode != 0) {
-        throw StateError('ssh-keygen failed: ${result.stderr}');
-      }
+    final result = await Process.run(
+      'ssh-keygen',
+      ['-q', '-t', 'ed25519', '-N', '', '-f', hostKey],
+    );
+    if (result.exitCode != 0) {
+      throw StateError('ssh-keygen failed: ${result.stderr}');
     }
 
+    // The client key comes from the app's own generator, so this test also
+    // proves an on-device key authenticates against a real sshd.
+    final clientKey = await const SshKeygen().generate(comment: 'test');
     final authorizedKeys = File('${dir.path}/authorized_keys')
-      ..writeAsStringSync(File('$clientKey.pub').readAsStringSync());
+      ..writeAsStringSync('${clientKey.publicKey}\n');
 
     final port = await _freePort();
     final username = Platform.environment['USER'] ?? 'root';
@@ -140,7 +140,7 @@ LogLevel ERROR
       directory: dir,
       port: port,
       username: username,
-      clientKeyPem: File(clientKey).readAsStringSync(),
+      clientKeyPem: clientKey.privateKeyPem,
     );
   }
 

@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
 import 'package:mobilecode/app/providers.dart';
 import 'package:mobilecode/data/secure/credential_store.dart';
 import 'package:mobilecode/features/github/github_auth.dart';
+import 'package:mobilecode/features/ssh/ssh_keygen.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -18,6 +20,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   final _username = TextEditingController();
   var _loaded = false;
   var _hasStoredKey = false;
+  var _generating = false;
+  String? _publicKey;
 
   @override
   void initState() {
@@ -37,8 +41,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         .read(credentialStoreProvider)
         .read(CredentialStore.codespaceKeyRef);
     if (!mounted) return;
+    final pub = await ref
+        .read(credentialStoreProvider)
+        .read(CredentialStore.codespacePublicKeyRef);
+    if (!mounted) return;
     setState(() {
       _hasStoredKey = stored != null && stored.isNotEmpty;
+      _publicKey = pub;
       _username.text = ref.read(codespaceUsernameProvider);
       _loaded = true;
     });
@@ -85,12 +94,53 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 Text('Codespaces', style: theme.textTheme.titleMedium),
                 const SizedBox(height: 8),
                 Text(
-                  'One key is shared by every Codespace: they are disposable '
-                  'and numerous, and the setup script authorises a single '
-                  'public key. Paste the private half here and give the '
-                  'public half to tools/codespace-bridge.sh.',
+                  'Generate a key here and the private half never leaves this '
+                  'phone. Add the public half as a Codespaces secret named '
+                  'MOBILECODE_PUBLIC_KEY and every Codespace configures '
+                  'itself on start.',
                   style: theme.textTheme.bodySmall,
                 ),
+                const SizedBox(height: 16),
+
+                if (_publicKey != null) ...[
+                  Text('Public key', style: theme.textTheme.labelLarge),
+                  const SizedBox(height: 4),
+                  SelectableText(
+                    _publicKey!,
+                    style: const TextStyle(
+                      fontFamily: 'monospace',
+                      fontSize: 11,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    children: [
+                      OutlinedButton.icon(
+                        icon: const Icon(Icons.copy, size: 18),
+                        label: const Text('Copy public key'),
+                        onPressed: () {
+                          Clipboard.setData(ClipboardData(text: _publicKey!));
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Public key copied')),
+                          );
+                        },
+                      ),
+                      TextButton(
+                        onPressed: _generating ? null : _generate,
+                        child: const Text('Regenerate'),
+                      ),
+                    ],
+                  ),
+                ] else
+                  FilledButton.icon(
+                    icon: const Icon(Icons.vpn_key_outlined),
+                    label: Text(
+                      _generating ? 'Generating…' : 'Generate key on this phone',
+                    ),
+                    onPressed: _generating ? null : _generate,
+                  ),
+
                 const SizedBox(height: 16),
 
                 TextField(
@@ -106,28 +156,42 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 ),
                 const SizedBox(height: 16),
 
-                TextField(
-                  controller: _key,
-                  decoration: InputDecoration(
-                    labelText: 'Private key (PEM)',
-                    helperText: _hasStoredKey
-                        ? 'A key is stored. Paste a new one to replace it.'
-                        : 'Stored in the device keychain, never uploaded.',
+                // Kept as an escape hatch for an existing key the user already
+                // trusts on their machines. Generating is the better path, so
+                // it is tucked away rather than presented first.
+                ExpansionTile(
+                  tilePadding: EdgeInsets.zero,
+                  title: Text(
+                    'Or paste an existing private key',
+                    style: theme.textTheme.bodyMedium,
                   ),
-                  maxLines: 5,
-                  autocorrect: false,
-                ),
-                const SizedBox(height: 16),
-
-                Row(
                   children: [
-                    FilledButton(onPressed: _save, child: const Text('Save')),
-                    const SizedBox(width: 12),
-                    if (_hasStoredKey)
-                      TextButton(
-                        onPressed: _clear,
-                        child: const Text('Remove key'),
+                    TextField(
+                      controller: _key,
+                      decoration: InputDecoration(
+                        labelText: 'Private key (PEM)',
+                        helperText: _hasStoredKey
+                            ? 'A key is stored. Paste a new one to replace it.'
+                            : 'Stored in the device keychain, never uploaded.',
                       ),
+                      maxLines: 5,
+                      autocorrect: false,
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        FilledButton(
+                          onPressed: _save,
+                          child: const Text('Save'),
+                        ),
+                        const SizedBox(width: 12),
+                        if (_hasStoredKey)
+                          TextButton(
+                            onPressed: _clear,
+                            child: const Text('Remove key'),
+                          ),
+                      ],
+                    ),
                   ],
                 ),
 
@@ -136,6 +200,41 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               ],
             ),
     );
+  }
+
+  /// Mints a key pair on the device. The private half goes straight into the
+  /// keychain and is never displayed — only the public half is shown, because
+  /// only the public half needs to travel.
+  Future<void> _generate() async {
+    setState(() => _generating = true);
+    final messenger = ScaffoldMessenger.of(context);
+
+    try {
+      final key = await const SshKeygen().generate();
+      final credentials = ref.read(credentialStoreProvider);
+      await credentials.write(
+        CredentialStore.codespaceKeyRef,
+        key.privateKeyPem,
+      );
+      await credentials.write(
+        CredentialStore.codespacePublicKeyRef,
+        key.publicKey,
+      );
+
+      if (!mounted) return;
+      setState(() {
+        _publicKey = key.publicKey;
+        _hasStoredKey = true;
+        _generating = false;
+      });
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Key generated on this device')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _generating = false);
+      messenger.showSnackBar(SnackBar(content: Text('$error')));
+    }
   }
 
   Future<void> _save() async {

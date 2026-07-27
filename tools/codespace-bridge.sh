@@ -16,7 +16,11 @@
 
 set -euo pipefail
 
-PUBLIC_KEY="${1:-}"
+# All arguments joined, not just $1: an ssh public key contains spaces, and
+# pasting one unquoted is the obvious thing to do. Taking $1 alone silently
+# authorised the string "ssh-ed25519" and left the user with a bridge that
+# rejected them for no visible reason.
+PUBLIC_KEY="${*:-}"
 BRIDGE_PORT="${MOBILECODE_BRIDGE_PORT:-2222}"
 SSHD_PORT="${MOBILECODE_SSHD_PORT:-2223}"
 STATE_DIR="$HOME/.mobilecode"
@@ -46,6 +50,18 @@ if ! command -v websocat >/dev/null 2>&1; then
     https://github.com/vi/websocat/releases/latest/download/websocat.x86_64-unknown-linux-musl
   sudo chmod +x /usr/local/bin/websocat
 fi
+
+case "$PUBLIC_KEY" in
+  ssh-ed25519\ *|ssh-rsa\ *|ecdsa-sha2-*\ *) ;;
+  *)
+    echo "That does not look like an SSH public key:" >&2
+    echo "  $PUBLIC_KEY" >&2
+    echo >&2
+    echo "Expected something starting 'ssh-ed25519 AAAA…'. If you pasted a" >&2
+    echo "private key or a file path, use the public half instead." >&2
+    exit 1
+    ;;
+esac
 
 echo "==> Authorising your key"
 mkdir -p "$HOME/.ssh"
@@ -91,11 +107,50 @@ nohup websocat --binary \
   "tcp:127.0.0.1:$SSHD_PORT" \
   >"$STATE_DIR/websocat.log" 2>&1 &
 
-sleep 1
+# Confirm the bridge is actually listening before going further. If websocat
+# died — a bad download, a port already taken — GitHub never forwards the
+# port, and the visibility call then fails with a 404 that looks like a
+# GitHub problem rather than a dead process.
+listening=""
+for _ in $(seq 1 10); do
+  if (command -v ss >/dev/null 2>&1 && ss -ltn 2>/dev/null | grep -q ":$BRIDGE_PORT ") ||
+     (command -v netstat >/dev/null 2>&1 && netstat -ltn 2>/dev/null | grep -q ":$BRIDGE_PORT "); then
+    listening=yes
+    break
+  fi
+  sleep 1
+done
+
+if [ -z "$listening" ]; then
+  echo >&2
+  echo "The bridge is not listening on $BRIDGE_PORT. websocat log:" >&2
+  tail -20 "$STATE_DIR/websocat.log" >&2 2>/dev/null || true
+  exit 1
+fi
 
 if [ -n "${CODESPACE_NAME:-}" ] && command -v gh >/dev/null 2>&1; then
-  echo "==> Making port $BRIDGE_PORT public"
-  gh codespace ports visibility "$BRIDGE_PORT:public" -c "$CODESPACE_NAME"
+  # GitHub forwards a port when it notices something listening, and that scan
+  # is not instant. Setting visibility before the port is registered fails
+  # with a 404 — the tunnel genuinely does not know the port yet — so retry
+  # rather than treat the first failure as final.
+  echo "==> Making port $BRIDGE_PORT public (waiting for GitHub to see it)"
+  published=""
+  for _ in $(seq 1 20); do
+    if gh codespace ports visibility "$BRIDGE_PORT:public" \
+         -c "$CODESPACE_NAME" >/dev/null 2>&1; then
+      published=yes
+      break
+    fi
+    sleep 3
+  done
+
+  if [ -n "$published" ]; then
+    echo "    port $BRIDGE_PORT is public"
+  else
+    echo
+    echo "    Could not set it automatically after 60s. Open the PORTS panel,"
+    echo "    right-click port $BRIDGE_PORT, and set Port Visibility to Public."
+  fi
 else
   echo
   echo "Could not set port visibility automatically. In the Ports panel, set"

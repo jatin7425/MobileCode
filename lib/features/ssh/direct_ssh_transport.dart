@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:dartssh2/dartssh2.dart';
@@ -10,6 +11,10 @@ import 'package:mobilecode/features/ssh/host_key_verifier.dart';
 import 'package:mobilecode/features/ssh/ssh_transport.dart';
 import 'package:mobilecode/features/ssh/tmux.dart';
 import 'package:mobilecode/features/ssh/websocket_ssh_socket.dart';
+
+/// Port the Codespaces bridge listens on, quoted in error messages so the
+/// user knows which port to check. Matches tools/codespace-bridge.sh.
+const codespaceBridgePortHint = 2222;
 
 /// Raised when we cannot connect, with a message fit to show the user.
 class SshConnectionException implements Exception {
@@ -68,10 +73,8 @@ class DirectSshTransport implements SshTransport {
             )
           : await SSHSocket.connect(host.hostname, host.port, timeout: timeout);
     } catch (error) {
-      throw SshConnectionException(
-        'Could not reach ${host.displayAddress}.',
-        cause: error,
-      );
+      throw SshConnectionException(_reachabilityMessage(host, error),
+          cause: error);
     }
 
     final secret = host.credentialRef == null
@@ -111,6 +114,39 @@ class DirectSshTransport implements SshTransport {
     }
 
     return client;
+  }
+
+  /// Turns a transport failure into something that names the likely cause.
+  ///
+  /// "Could not reach X" covers four unrelated situations, and on a WebSocket
+  /// host they need different fixes. Distinguishing them is the difference
+  /// between a two-minute fix and an afternoon of guessing.
+  String _reachabilityMessage(HostConfig host, Object error) {
+    if (!host.isWebSocket) {
+      return 'Could not reach ${host.hostname}:${host.port}. $error';
+    }
+
+    final text = error.toString();
+
+    // The endpoint answered but refused to become a WebSocket. Something is
+    // listening — GitHub's proxy — but the bridge behind it is not.
+    if (error is WebSocketException || text.contains('not upgraded')) {
+      return 'The forwarded port answered but did not upgrade to a '
+          'WebSocket. The bridge is probably not running in this Codespace: '
+          'rebuild the container so .devcontainer starts it, or run '
+          'tools/codespace-bridge.sh there. ($error)';
+    }
+
+    if (error is HandshakeException) {
+      return 'TLS failed talking to ${Uri.parse(host.websocketUrl!).host}. '
+          '($error)';
+    }
+
+    // Nothing answered at all — most often the port is not forwarded, or its
+    // visibility is still private rather than public.
+    return 'Could not reach ${Uri.parse(host.websocketUrl!).host}. Check the '
+        'Codespace is running and that port $codespaceBridgePortHint is '
+        'forwarded and set to Public. ($error)';
   }
 
   Future<String?> _passphraseFor(HostConfig host) =>
