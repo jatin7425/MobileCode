@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 import 'package:mobilecode/app/providers.dart';
 import 'package:mobilecode/data/secure/credential_store.dart';
@@ -129,6 +130,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       ),
                   ],
                 ),
+
+                const Divider(height: 32),
+                const _VersionLine(),
               ],
             ),
     );
@@ -161,5 +165,34 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         .delete(CredentialStore.codespaceKeyRef);
     if (!mounted) return;
     setState(() => _hasStoredKey = false);
+  }
+}
+
+/// Shows the installed version.
+///
+/// Worth having because APKs are sideloaded here rather than delivered by a
+/// store: two builds look identical on the home screen, and the build number
+/// is the only way to tell which CI run a phone is actually running.
+class _VersionLine extends StatelessWidget {
+  const _VersionLine();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return FutureBuilder<PackageInfo>(
+      future: PackageInfo.fromPlatform(),
+      builder: (context, snapshot) {
+        final info = snapshot.data;
+        return Text(
+          info == null
+              ? 'MobileCode'
+              : 'MobileCode ${info.version} (build ${info.buildNumber})',
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        );
+      },
+    );
   }
 }

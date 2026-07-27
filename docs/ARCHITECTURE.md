@@ -226,12 +226,17 @@ This is cheap now and expensive to retrofit.
 
 ## 8. Roadmap
 
+The app's minor version tracks the completed phase — 0.1.0 for P1, 0.2.0 for
+P2, 0.3.0 for P3 — with CI substituting its run number as the build number.
+It stays below 1.0 while P1 remains unverified against a real sshd; the version
+should not claim more than has been proven.
+
 | Phase | Deliverable | State |
 |---|---|---|
 | **P0** | Scaffold: app boots, navigation, storage layer, models | done |
 | **P1** | SSH + terminal + tmux — add a host, open a shell, reattach after backgrounding | code complete, unverified on a device |
 | **P2** | Agent launch specs, remote detection, accessory bar | done |
-| **P3** | GitHub device-flow OAuth, repo and PR browsing | not started |
+| **P3** | GitHub device-flow OAuth, Codespaces over a WebSocket | done; live Codespace round trip unverified |
 | **P4** | SFTP file browser and editor | not started |
 | **P5** | Biometrics, concurrent sessions, port forwarding, snippets | not started |
 
