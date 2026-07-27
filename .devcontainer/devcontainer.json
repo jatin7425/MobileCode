@@ -10,10 +10,10 @@
   // Marking the port public here means the app can reach it without anyone
   // opening the Ports panel. sshd behind it accepts keys only.
   "portsAttributes": {
-    "2222": {
+    "2224": {
       "label": "MobileCode SSH bridge",
       "onAutoForward": "silent"
     }
   },
-  "forwardPorts": [2222]
+  "forwardPorts": [2224]
 }

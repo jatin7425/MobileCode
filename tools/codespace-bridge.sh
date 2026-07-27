@@ -21,7 +21,9 @@ set -euo pipefail
 # authorised the string "ssh-ed25519" and left the user with a bridge that
 # rejected them for no visible reason.
 PUBLIC_KEY="${*:-}"
-BRIDGE_PORT="${MOBILECODE_BRIDGE_PORT:-2222}"
+# Not 2222: Codespaces runs its own sshd there — the one `gh codespace ssh`
+# uses — so that port is never free and websocat dies with "Address in use".
+BRIDGE_PORT="${MOBILECODE_BRIDGE_PORT:-2224}"
 SSHD_PORT="${MOBILECODE_SSHD_PORT:-2223}"
 STATE_DIR="$HOME/.mobilecode"
 

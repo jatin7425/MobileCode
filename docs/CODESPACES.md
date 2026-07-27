@@ -32,9 +32,9 @@ buys a transport built entirely on documented, stable behaviour.
 ```
   phone                          GitHub tunnel            Codespace
 ┌──────────────────┐            ┌────────────┐   ┌────────────────────────┐
-│ dartssh2         │            │            │   │ websocat  :2222        │
+│ dartssh2         │            │            │   │ websocat  :2224        │
 │   └ WebSocket…   │═══ wss ═══▶│ forwarded  │══▶│    └ tcp 127.0.0.1:2223│
-│      SshSocket   │            │ port :2222 │   │         └ sshd         │
+│      SshSocket   │            │ port :2224 │   │         └ sshd         │
 └──────────────────┘            └────────────┘   └────────────────────────┘
 ```
 
