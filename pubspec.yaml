@@ -21,7 +21,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # removed rather than going backwards. Still pre-1.0 because P1 has never run
 # against a real sshd — the version should not claim more than is proven.
 # CI replaces the build number with the workflow run number.
-version: 0.3.0+1
+version: 0.4.0+1
 
 environment:
   sdk: ^3.12.2
@@ -48,6 +48,8 @@ dependencies:
   uuid: ^4.6.0
   package_info_plus: ^10.2.1
   cryptography: ^2.9.0
+  http: ^1.5.0
+  audioplayers: ^6.5.1
 
 dependency_overrides:
   # jni 1.0.1 applies the Kotlin plugin only when AGP major < 9 but calls

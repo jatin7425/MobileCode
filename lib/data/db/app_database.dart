@@ -9,7 +9,7 @@ class AppDatabase {
   final Database db;
 
   static const _fileName = 'mobilecode.db';
-  static const _version = 2;
+  static const _version = 3;
 
   static Future<AppDatabase> open() async {
     final path = p.join(await getDatabasesPath(), _fileName);
@@ -47,6 +47,31 @@ class AppDatabase {
         first_seen  INTEGER NOT NULL
       )
     ''');
+
+    await _createVoiceTables(db);
+  }
+
+  /// Personas and the endpoint they speak through. Split out so the v3
+  /// migration and a fresh install build exactly the same schema.
+  static Future<void> _createVoiceTables(Database db) async {
+    await db.execute('''
+      CREATE TABLE personas (
+        id              TEXT PRIMARY KEY,
+        name            TEXT NOT NULL,
+        role            TEXT NOT NULL DEFAULT '',
+        voice_key       TEXT,
+        default_emotion TEXT NOT NULL DEFAULT 'Neutral'
+      )
+    ''');
+
+    // Non-secret configuration only. The API key lives in the secure store;
+    // putting it here would place it in the database backup.
+    await db.execute('''
+      CREATE TABLE app_settings (
+        key   TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      )
+    ''');
   }
 
   static Future<void> _upgrade(Database db, int from, int to) async {
@@ -70,6 +95,9 @@ class AppDatabase {
         SELECT host_id, key_type, fingerprint, first_seen FROM known_hosts_v1
       ''');
       await db.execute('DROP TABLE known_hosts_v1');
+    }
+    if (from < 3) {
+      await _createVoiceTables(db);
     }
   }
 

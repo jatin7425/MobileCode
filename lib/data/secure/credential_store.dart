@@ -17,6 +17,10 @@ abstract class CredentialStore {
 
   /// Reference for a provider API key, e.g. `agent.claude.apiKey`.
   static String agentApiKeyRef(String agentId) => 'agent.$agentId.apiKey';
+
+  /// Reference for the speech endpoint's API key. Kept out of the database so
+  /// it is not carried into a device backup alongside the endpoint URL.
+  static const voiceApiKeyRef = 'voice.nvcf.apiKey';
 }
 
 /// Platform-backed implementation: iOS Keychain, Android Keystore.

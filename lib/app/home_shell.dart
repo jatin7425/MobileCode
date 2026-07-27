@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'package:mobilecode/features/hosts/hosts_screen.dart';
 import 'package:mobilecode/features/settings/settings_screen.dart';
+import 'package:mobilecode/features/voice/voice_screen.dart';
 
 /// Top-level navigation.
 class HomeShell extends StatefulWidget {
@@ -16,6 +17,7 @@ class _HomeShellState extends State<HomeShell> {
 
   static const _screens = [
     HostsScreen(),
+    VoiceScreen(),
     SettingsScreen(),
   ];
 
@@ -32,6 +34,11 @@ class _HomeShellState extends State<HomeShell> {
             icon: Icon(Icons.dns_outlined),
             selectedIcon: Icon(Icons.dns),
             label: 'Hosts',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.record_voice_over_outlined),
+            selectedIcon: Icon(Icons.record_voice_over),
+            label: 'Voice',
           ),
           NavigationDestination(
             icon: Icon(Icons.settings_outlined),

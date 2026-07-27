@@ -222,7 +222,7 @@ This is cheap now and expensive to retrofit.
 ## 8. Roadmap
 
 The app's minor version tracks the completed phase — 0.1.0 for P1, 0.2.0 for
-P2, 0.3.0 for P3 — with CI substituting its run number as the build number.
+P2, 0.4.0 for P4 — with CI substituting its run number as the build number.
 It stays below 1.0 while P1 remains unverified against a real sshd; the version
 should not claim more than has been proven.
 
@@ -232,8 +232,33 @@ should not claim more than has been proven.
 | **P1** | SSH + terminal + tmux — add a host, open a shell, reattach after backgrounding | code complete, unverified on a device |
 | **P2** | Agent launch specs, remote detection, accessory bar | done |
 | **P3** | GitHub integration | removed — see below |
-| **P4** | SFTP file browser and editor | not started |
-| **P5** | Biometrics, concurrent sessions, port forwarding, snippets | not started |
+| **P4** | Voice: personas assigned to Magpie TTS speakers | done, unverified against a live endpoint |
+| **P5** | SFTP file browser and editor | not started |
+| **P6** | Biometrics, concurrent sessions, port forwarding, snippets | not started |
+
+### Voice (P4)
+
+Personas are named characters the app speaks as. A persona owns a *speaker*,
+not a voice name: the endpoint ships six emotional takes on each speaker
+(Neutral, Angry, Disgusted, Fearful, Happy, Sad), and which one to use belongs
+to the moment rather than the character — a failed deploy should not sound
+like a finished one. So `Persona` stores the speaker key and the caller picks
+the mood per utterance.
+
+Two decisions worth recording:
+
+- **Voice names are parsed positionally, never validated against a list.**
+  NVIDIA adds speakers, locales, and emotions between releases, and a voice the
+  endpoint offers but the app refuses to show is a bug the user cannot work
+  around. `VoiceId` keeps the original string verbatim and round-trips it.
+- **The `list_voices` response shape is not pinned.** It has been a bare array,
+  an object keyed by locale, and an array of objects across Riva releases, so
+  `parseVoiceNames` walks the decoded JSON and collects anything name-shaped.
+
+The endpoint URL lives in `app_settings`; the API key lives in the credential
+store, because the database ends up in a device backup and the key must not.
+`LINEAR_PCM` responses are headerless, so `wrapPcmAsWav` prefixes a RIFF header
+before playback — without it every clip is silence.
 
 ### Codespaces, removed
 
