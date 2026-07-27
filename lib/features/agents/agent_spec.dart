@@ -41,9 +41,6 @@ class AgentSpec {
   final bool usesAlternateScreen;
 
   bool get supportsApiKey => apiKeyEnvVar != null;
-
-  /// Shell snippet that exits 0 when the binary is present on the host.
-  String get probeCommand => 'command -v $binary >/dev/null 2>&1';
 }
 
 /// Agents we know how to launch.

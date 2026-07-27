@@ -16,7 +16,11 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 1.0.0+1
+# Minor version tracks the completed roadmap phase in docs/ARCHITECTURE.md:
+# 0.1.0 = P1, 0.2.0 = P2, 0.3.0 = P3. Still pre-1.0 because P1 has never run
+# against a real sshd — the version should not claim more than is proven.
+# CI replaces the build number with the workflow run number.
+version: 0.3.0+1
 
 environment:
   sdk: ^3.12.2
@@ -41,6 +45,8 @@ dependencies:
   sqflite: ^2.4.3
   path: ^1.9.1
   uuid: ^4.6.0
+  http: ^1.6.0
+  package_info_plus: ^10.2.1
 
 dependency_overrides:
   # jni 1.0.1 applies the Kotlin plugin only when AGP major < 9 but calls

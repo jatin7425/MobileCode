@@ -38,6 +38,28 @@ flutter test
 flutter run          # needs the Android SDK or Xcode
 ```
 
+## Codespaces
+
+The app can open a terminal on a GitHub Codespace as well as on your own
+machines. A Codespace exposes no public SSH endpoint, so this runs SSH inside a
+WebSocket over a forwarded port — see [`docs/CODESPACES.md`](docs/CODESPACES.md)
+for why and how, and `tools/codespace-bridge.sh` for the one-time setup inside
+each Codespace.
+
+Signing in to GitHub uses the OAuth **device flow**, which needs no client
+secret — the right choice for an app that ships to phones. It does need a
+client id, which is per-installation and so cannot be hardcoded:
+
+1. Register a GitHub OAuth App and enable **Device flow** on it.
+2. Build with the id:
+
+```sh
+flutter build apk --release --dart-define=GITHUB_CLIENT_ID=Ov23li...
+```
+
+Without it, the Codespaces tab explains what is missing rather than failing
+mysteriously. The requested scopes are `repo`, `codespace`, and `read:user`.
+
 ## Getting a build onto your phone
 
 Actions → **Build app** → *Run workflow*. Pick `android`, `ios`, or `both` and
@@ -49,14 +71,45 @@ GitHub always wraps artifacts in a zip, so what downloads is
 
 ### Android
 
-Works as you would hope. The release APK is signed with the standard debug key
-(see `android/app/build.gradle.kts`), which is enough to install it yourself:
-copy the `.apk` to the phone, open it, and allow installing from unknown
+Copy the `.apk` to the phone, open it, and allow installing from unknown
 sources when prompted.
 
-That key is fine for personal sideloading and **not** fine for the Play Store,
-which rejects debug-signed uploads. Publishing means generating an upload
-keystore and wiring it into the Gradle release config.
+#### Installing updates over the top
+
+Without a signing key configured, each CI run signs with a **different** key:
+Gradle generates `~/.android/debug.keystore` whenever one is missing, and CI
+runners start clean every time. Android refuses to update an app whose
+signature changed, so each new build can only be installed by uninstalling
+first — which destroys your hosts, host key pins, and stored keys.
+
+Configure a stable key once and builds install as updates. Generate a keystore:
+
+```sh
+keytool -genkeypair -v \
+  -keystore mobilecode.jks -storetype PKCS12 \
+  -keyalg RSA -keysize 2048 -validity 10000 \
+  -alias mobilecode \
+  -dname "CN=MobileCode, O=MobileCode, C=IN"
+```
+
+Then add four repository secrets:
+
+```sh
+base64 -w0 mobilecode.jks | gh secret set MOBILECODE_KEYSTORE_BASE64
+gh secret set MOBILECODE_KEYSTORE_PASSWORD   # the store password you chose
+gh secret set MOBILECODE_KEY_PASSWORD        # the key password you chose
+gh secret set MOBILECODE_KEY_ALIAS --body mobilecode
+```
+
+**Keep `mobilecode.jks` safe and do not commit it.** Lose it and you can never
+update an installed app again — only uninstall and start over. A signing key
+in a public repo would let anyone build an APK that Android accepts as an
+update to yours.
+
+With no keystore secret set, builds still work and fall back to debug signing;
+you just keep having to uninstall between versions.
+
+This key is for sideloading. The Play Store has its own signing requirements.
 
 ### iOS
 

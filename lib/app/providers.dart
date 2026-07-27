@@ -1,6 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:mobilecode/features/codespaces/codespace.dart';
+import 'package:mobilecode/features/codespaces/codespaces_client.dart';
+import 'package:mobilecode/features/github/github_auth.dart';
+import 'package:mobilecode/features/github/github_device_flow.dart';
 import 'package:mobilecode/data/db/host_repository.dart';
 import 'package:mobilecode/data/db/known_host_repository.dart';
 import 'package:mobilecode/data/models/host.dart';
@@ -31,6 +37,50 @@ final knownHostRepositoryProvider = Provider<KnownHostRepository>(
 final hostsProvider = FutureProvider<List<HostConfig>>(
   (ref) => ref.watch(hostRepositoryProvider).list(),
 );
+
+/// GitHub OAuth App client id, supplied at build time:
+/// `flutter build apk --dart-define=GITHUB_CLIENT_ID=...`
+///
+/// Empty in a default build. Device flow needs no client *secret*, so this is
+/// not sensitive — but it is per-installation, so it cannot be hardcoded.
+const githubClientId = String.fromEnvironment('GITHUB_CLIENT_ID');
+
+final githubDeviceFlowProvider = Provider<GithubDeviceFlow>((ref) {
+  final flow = GithubDeviceFlow(clientId: githubClientId);
+  ref.onDispose(flow.dispose);
+  return flow;
+});
+
+final githubAuthProvider = ChangeNotifierProvider<GithubAuthController>((ref) {
+  final controller = GithubAuthController(
+    credentials: ref.watch(credentialStoreProvider),
+    deviceFlow: ref.watch(githubDeviceFlowProvider),
+  );
+  unawaited(controller.restore());
+  return controller;
+});
+
+/// Null until the user signs in.
+final codespacesClientProvider = Provider<CodespacesClient?>((ref) {
+  final token = ref.watch(githubAuthProvider).token;
+  if (token == null) return null;
+  final client = CodespacesClient(token: token);
+  ref.onDispose(client.dispose);
+  return client;
+});
+
+final codespacesProvider = FutureProvider<List<Codespace>>((ref) async {
+  final client = ref.watch(codespacesClientProvider);
+  if (client == null) return const [];
+  return client.list();
+});
+
+/// Username to log in as inside a Codespace.
+///
+/// Varies by devcontainer image — `codespace` in the default image, `node` or
+/// `vscode` in others — so it is configurable rather than assumed. The setup
+/// script prints the right value.
+final codespaceUsernameProvider = StateProvider<String>((ref) => 'codespace');
 
 /// Key needed so the trust prompt can find a navigator: host key verification
 /// happens deep inside the SSH handshake, far from any widget's context.

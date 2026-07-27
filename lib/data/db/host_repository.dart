@@ -49,9 +49,12 @@ class SqliteHostRepository implements HostRepository {
 
   @override
   Future<void> delete(String id) async {
-    // known_hosts cascades via the foreign key; the secure store does not,
-    // so clear it explicitly.
+    // known_hosts no longer carries a foreign key, so nothing cascades: the
+    // pin and both secrets have to be cleared by hand. An orphaned private
+    // key in the Keychain is a liability the user believes they deleted.
     await _database.db.delete('hosts', where: 'id = ?', whereArgs: [id]);
+    await _database.db
+        .delete('known_hosts', where: 'host_id = ?', whereArgs: [id]);
     await _credentials.delete(CredentialStore.hostCredentialRef(id));
     await _credentials.delete(CredentialStore.hostPassphraseRef(id));
   }

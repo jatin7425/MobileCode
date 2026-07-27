@@ -85,9 +85,27 @@ have file access, tool use, permission prompts, and repo context on the machine
 where the code lives. The app's job is to launch them, render them, and make
 them usable with a thumb.
 
-An agent is described by a small declarative spec — binary name, probe command,
-launch arguments, auth mode, whether it repaints an alternate screen buffer —
-so supporting a new agent is a data change, not a code change.
+An agent is described by a small declarative spec — binary name, launch
+arguments, auth mode, whether it repaints an alternate screen buffer — so
+supporting a new agent is a data change, not a code change.
+
+### 2.5 Probing runs in a login shell
+
+Before offering a list of agents we ask the host which ones it actually has.
+That probe must run as `$SHELL -lc`, not as a bare command.
+
+sshd executes one-shot commands in a **non-login, non-interactive** shell, so
+`~/.profile`, `~/.bash_profile`, and `~/.zprofile` are never sourced. Agent
+CLIs are usually installed through npm under nvm, whose `PATH` entry lives in
+exactly those files. A bare `command -v claude` would report "not installed"
+on a machine where `claude` runs perfectly on login — an authoritative-looking
+wrong answer. Probing through a login shell reproduces the environment the
+agent will actually launch in, which is the only environment whose answer
+means anything.
+
+The probe's output parser is deliberately lenient: a login shell may print a
+MOTD, a last-login line, or a warning first, and none of that may turn into a
+bogus availability result.
 
 ## 3. Agent authentication
 
@@ -208,12 +226,17 @@ This is cheap now and expensive to retrofit.
 
 ## 8. Roadmap
 
+The app's minor version tracks the completed phase — 0.1.0 for P1, 0.2.0 for
+P2, 0.3.0 for P3 — with CI substituting its run number as the build number.
+It stays below 1.0 while P1 remains unverified against a real sshd; the version
+should not claim more than has been proven.
+
 | Phase | Deliverable | State |
 |---|---|---|
 | **P0** | Scaffold: app boots, navigation, storage layer, models | done |
 | **P1** | SSH + terminal + tmux — add a host, open a shell, reattach after backgrounding | code complete, unverified on a device |
-| **P2** | Agent launch specs, remote detection, accessory bar | launcher and bar done; detection per-agent pending |
-| **P3** | GitHub device-flow OAuth, repo and PR browsing | not started |
+| **P2** | Agent launch specs, remote detection, accessory bar | done |
+| **P3** | GitHub device-flow OAuth, Codespaces over a WebSocket | done; live Codespace round trip unverified |
 | **P4** | SFTP file browser and editor | not started |
 | **P5** | Biometrics, concurrent sessions, port forwarding, snippets | not started |
 

@@ -3,9 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:mobilecode/app/providers.dart';
 import 'package:mobilecode/data/models/host.dart';
-import 'package:mobilecode/features/agents/agent_spec.dart';
+import 'package:mobilecode/features/agents/agent_picker_screen.dart';
 import 'package:mobilecode/features/hosts/host_form_screen.dart';
-import 'package:mobilecode/features/terminal/terminal_screen.dart';
 
 class HostsScreen extends ConsumerWidget {
   const HostsScreen({super.key});
@@ -42,66 +41,25 @@ class HostsScreen extends ConsumerWidget {
   }
 }
 
-class _HostTile extends ConsumerWidget {
+class _HostTile extends StatelessWidget {
   const _HostTile({required this.host});
 
   final HostConfig host;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     return ListTile(
       leading: const Icon(Icons.dns_outlined),
       title: Text(host.label),
       subtitle: Text(host.displayAddress),
       trailing: const Icon(Icons.chevron_right),
-      onTap: () => _pickAgent(context, ref),
-    );
-  }
-
-  Future<void> _pickAgent(BuildContext context, WidgetRef ref) async {
-    final agent = await showModalBottomSheet<_AgentChoice>(
-      context: context,
-      builder: (context) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            for (final agent in AgentRegistry.all)
-              ListTile(
-                leading: const Icon(Icons.auto_awesome_outlined),
-                title: Text(agent.displayName),
-                onTap: () =>
-                    Navigator.pop(context, _AgentChoice(agent)),
-              ),
-            const Divider(height: 1),
-            ListTile(
-              leading: const Icon(Icons.terminal),
-              title: const Text('Plain shell'),
-              onTap: () => Navigator.pop(context, const _AgentChoice(null)),
-            ),
-          ],
-        ),
-      ),
-    );
-
-    if (agent == null || !context.mounted) return;
-
-    await Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => TerminalScreen(
-          host: host,
-          transport: ref.read(sshTransportProvider),
-          agent: agent.spec,
-        ),
+      // The picker connects and asks the host what it has, rather than
+      // offering agents that may not be installed.
+      onTap: () => Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => AgentPickerScreen(host: host)),
       ),
     );
   }
-}
-
-/// Wrapper so "plain shell" (a null spec) is distinguishable from a dismissed
-/// sheet (a null result).
-class _AgentChoice {
-  const _AgentChoice(this.spec);
-  final AgentSpec? spec;
 }
 
 class _EmptyState extends StatelessWidget {

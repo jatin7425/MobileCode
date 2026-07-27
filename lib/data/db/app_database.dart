@@ -9,15 +9,15 @@ class AppDatabase {
   final Database db;
 
   static const _fileName = 'mobilecode.db';
-  static const _version = 1;
+  static const _version = 2;
 
   static Future<AppDatabase> open() async {
     final path = p.join(await getDatabasesPath(), _fileName);
     final db = await openDatabase(
       path,
       version: _version,
-      onConfigure: (db) => db.execute('PRAGMA foreign_keys = ON'),
       onCreate: _createSchema,
+      onUpgrade: _upgrade,
     );
     return AppDatabase._(db);
   }
@@ -32,18 +32,47 @@ class AppDatabase {
         username          TEXT NOT NULL,
         auth_method       TEXT NOT NULL,
         credential_ref    TEXT,
-        working_directory TEXT
+        working_directory TEXT,
+        websocket_url     TEXT
       )
     ''');
 
+    // Deliberately no foreign key to hosts. A Codespace is pinned under an id
+    // derived from its name without ever being a row here — it comes and goes
+    // with GitHub, not with the user's host list — and a Codespace that is
+    // rebuilt and returns must still trip the mismatch check.
     await db.execute('''
       CREATE TABLE known_hosts (
-        host_id     TEXT PRIMARY KEY REFERENCES hosts(id) ON DELETE CASCADE,
+        host_id     TEXT PRIMARY KEY,
         key_type    TEXT NOT NULL,
         fingerprint TEXT NOT NULL,
         first_seen  INTEGER NOT NULL
       )
     ''');
+  }
+
+  static Future<void> _upgrade(Database db, int from, int to) async {
+    if (from < 2) {
+      await db.execute('ALTER TABLE hosts ADD COLUMN websocket_url TEXT');
+
+      // SQLite cannot drop a foreign key in place, so rebuild the table.
+      // Pins are security state — losing them would silently re-trust a
+      // changed host key — so the rows are copied, not recreated.
+      await db.execute('ALTER TABLE known_hosts RENAME TO known_hosts_v1');
+      await db.execute('''
+        CREATE TABLE known_hosts (
+          host_id     TEXT PRIMARY KEY,
+          key_type    TEXT NOT NULL,
+          fingerprint TEXT NOT NULL,
+          first_seen  INTEGER NOT NULL
+        )
+      ''');
+      await db.execute('''
+        INSERT INTO known_hosts (host_id, key_type, fingerprint, first_seen)
+        SELECT host_id, key_type, fingerprint, first_seen FROM known_hosts_v1
+      ''');
+      await db.execute('DROP TABLE known_hosts_v1');
+    }
   }
 
   Future<void> close() => db.close();
