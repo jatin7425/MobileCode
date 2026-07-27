@@ -48,16 +48,28 @@ daemon is never directly exposed even though the forwarded port is public.
 
 ## Setup
 
-Inside the Codespace, once per Codespace:
+One-time, and then never again:
+
+1. In the app, **Settings → Generate key on this phone**. The private half goes
+   into the device keychain and never leaves it; only the public half is
+   displayed. Copy it.
+2. At <https://github.com/settings/codespaces>, add a Codespaces secret named
+   **`MOBILECODE_PUBLIC_KEY`** with that value, scoped to the repositories you
+   want reachable.
+
+That is the whole setup. `.devcontainer/devcontainer.json` runs the bridge from
+`postStartCommand`, so every Codespace — new ones, and old ones after a
+stop/resume — configures itself on start. Nothing to run by hand.
+
+`postStartCommand` rather than `postCreateCommand` on purpose: the bridge is a
+process, not a file, and it does not survive the Codespace being stopped.
+
+If the secret is absent the startup script exits quietly rather than standing
+up an sshd nobody can log into. To set a Codespace up manually instead:
 
 ```sh
 ./tools/codespace-bridge.sh "$(cat ~/.ssh/id_ed25519.pub)"
 ```
-
-Pass the **public** half of the key pair whose private half you added to the
-app. The script installs `openssh-server` and `websocat`, authorises your key,
-starts sshd on loopback, starts the bridge, and sets the forwarded port to
-public. It prints the URL to give the app.
 
 ## Security
 
@@ -80,7 +92,10 @@ why.
 The transport is proven: `test/ssh_over_websocket_test.dart` runs a real SSH
 session — authentication and two sequential commands — over
 `WebSocketSshSocket` against a real `sshd`, through a WebSocket bridge that
-reproduces this topology.
+reproduces this topology. It authenticates with a key from the app's own
+generator, so on-device key generation is proven against real OpenSSH too;
+`test/ssh_keygen_test.dart` additionally has `ssh-keygen -y` parse a generated
+key and confirms the public half it derives matches the one we hand out.
 
 What is **not** yet verified is the leg through GitHub's tunnel: whether their
 proxy passes a WebSocket upgrade through to a forwarded port cleanly enough

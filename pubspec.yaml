@@ -47,6 +47,7 @@ dependencies:
   uuid: ^4.6.0
   http: ^1.6.0
   package_info_plus: ^10.2.1
+  cryptography: ^2.9.0
 
 dependency_overrides:
   # jni 1.0.1 applies the Kotlin plugin only when AGP major < 9 but calls
