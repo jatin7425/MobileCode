@@ -239,16 +239,42 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   Future<void> _save() async {
     final messenger = ScaffoldMessenger.of(context);
-    if (_key.text.trim().isEmpty) {
+    final pasted = _key.text.trim();
+
+    if (pasted.isEmpty) {
       messenger.showSnackBar(
         const SnackBar(content: Text('Paste a private key first')),
       );
       return;
     }
 
+    // Public keys are what the user has just been copying around, so pasting
+    // one here is the easy mistake. Storing it produces "that private key
+    // could not be read" at connect time, far from the cause.
+    if (pasted.startsWith('ssh-') || pasted.startsWith('ecdsa-')) {
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text(
+            'That is a public key. This field wants the private half — the '
+            'block beginning "-----BEGIN".',
+          ),
+        ),
+      );
+      return;
+    }
+
+    if (!pasted.contains('PRIVATE KEY')) {
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('That does not look like a private key.'),
+        ),
+      );
+      return;
+    }
+
     await ref
         .read(credentialStoreProvider)
-        .write(CredentialStore.codespaceKeyRef, _key.text.trim());
+        .write(CredentialStore.codespaceKeyRef, pasted);
 
     if (!mounted) return;
     setState(() {
