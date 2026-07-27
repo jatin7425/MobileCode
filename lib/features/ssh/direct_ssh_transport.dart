@@ -14,7 +14,7 @@ import 'package:mobilecode/features/ssh/websocket_ssh_socket.dart';
 
 /// Port the Codespaces bridge listens on, quoted in error messages so the
 /// user knows which port to check. Matches tools/codespace-bridge.sh.
-const codespaceBridgePortHint = 2222;
+const codespaceBridgePortHint = 2224;
 
 /// Raised when we cannot connect, with a message fit to show the user.
 class SshConnectionException implements Exception {

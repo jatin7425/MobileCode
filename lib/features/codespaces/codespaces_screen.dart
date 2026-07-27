@@ -11,7 +11,7 @@ import 'package:mobilecode/features/github/github_auth.dart';
 
 /// Port the bridge listens on inside the Codespace. Must match
 /// `tools/codespace-bridge.sh`.
-const codespaceBridgePort = 2222;
+const codespaceBridgePort = 2224;
 
 class CodespacesScreen extends ConsumerWidget {
   const CodespacesScreen({super.key});
