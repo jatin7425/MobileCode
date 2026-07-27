@@ -13,11 +13,17 @@ class TerminalScreen extends StatefulWidget {
     super.key,
     required this.host,
     required this.transport,
+    this.connection,
     this.agent,
   });
 
   final HostConfig host;
   final SshTransport transport;
+
+  /// An already-authenticated connection to reuse, from the agent picker.
+  /// Null means open a fresh one.
+  final SshConnection? connection;
+
   final AgentSpec? agent;
 
   @override
@@ -37,6 +43,7 @@ class _TerminalScreenState extends State<TerminalScreen>
     _controller = SessionController(
       host: widget.host,
       transport: widget.transport,
+      connection: widget.connection,
       request: SessionRequest(
         // One session per host+agent pair, so returning to the same agent on
         // the same machine lands back in the work already in progress.

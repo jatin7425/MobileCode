@@ -64,7 +64,7 @@ abstract class TerminalSession {
   Future<void> close();
 }
 
-/// Opens sessions on a host.
+/// Opens connections to a host.
 ///
 /// The app connects directly from the device, but everything above this
 /// interface is written against it rather than against dartssh2. If we ever
@@ -72,5 +72,28 @@ abstract class TerminalSession {
 /// phone when an agent finishes — it slots in here without the terminal,
 /// agent, and UI layers noticing.
 abstract class SshTransport {
-  Future<TerminalSession> connect(HostConfig host, SessionRequest request);
+  Future<SshConnection> connect(HostConfig host);
+}
+
+/// An authenticated connection to a host.
+///
+/// Separate from [TerminalSession] because a connection outlives any one
+/// session and can do things a PTY cannot. Probing which agents are installed
+/// needs a one-shot command *before* the user has chosen what to launch, and
+/// re-authenticating for that would mean a second handshake — and a second
+/// passphrase or biometric prompt — for a question we could have asked over
+/// the connection we already have.
+abstract class SshConnection {
+  /// Runs a one-shot command and returns its stdout.
+  ///
+  /// This is a non-login, non-interactive shell, exactly as sshd provides it.
+  /// Commands that depend on the user's profile — anything involving `PATH`
+  /// set up by nvm, pyenv, or similar — must invoke a login shell explicitly.
+  Future<String> run(String command);
+
+  /// Opens a PTY, launching the agent in [request] if one is named.
+  Future<TerminalSession> openSession(SessionRequest request);
+
+  /// Drops the connection. Any multiplexed work on the host keeps running.
+  Future<void> close();
 }

@@ -41,49 +41,14 @@ class DirectSshTransport implements SshTransport {
   final Duration timeout;
 
   @override
-  Future<TerminalSession> connect(
-    HostConfig host,
-    SessionRequest request,
-  ) async {
+  Future<SshConnection> connect(HostConfig host) async {
     final verifier = verifierFactory(host);
     final client = await _authenticate(host, verifier);
-
-    try {
-      final multiplexer = await _detectMultiplexer(client);
-      final command = launcher.attachOrCreate(
-        name: request.sessionName,
-        workingDirectory: request.workingDirectory ?? host.defaultWorkingDirectory,
-        agent: request.agent,
-        multiplexer: multiplexer,
-      );
-
-      final pty = SSHPtyConfig(
-        width: request.columns,
-        height: request.rows,
-      );
-
-      // Run the multiplexer as the channel's command rather than typing it
-      // into a shell: no race against the shell's prompt, and nothing lands
-      // in the user's shell history.
-      final session = command.isEmpty
-          ? await client.shell(pty: pty, environment: request.environment)
-          : await client.execute(
-              command,
-              pty: pty,
-              environment: request.environment,
-            );
-
-      return _DirectTerminalSession(
-        client: client,
-        session: session,
-        multiplexer: multiplexer,
-        sessionName: request.sessionName,
-        launcher: launcher,
-      );
-    } catch (error) {
-      client.close();
-      rethrow;
-    }
+    return _DirectSshConnection(
+      client: client,
+      host: host,
+      launcher: launcher,
+    );
   }
 
   Future<SSHClient> _authenticate(
@@ -158,10 +123,67 @@ class DirectSshTransport implements SshTransport {
     }
   }
 
-  Future<MultiplexerKind> _detectMultiplexer(SSHClient client) async {
+}
+
+class _DirectSshConnection implements SshConnection {
+  _DirectSshConnection({
+    required this.client,
+    required this.host,
+    required this.launcher,
+  });
+
+  final SSHClient client;
+  final HostConfig host;
+  final TmuxLauncher launcher;
+
+  @override
+  Future<String> run(String command) async =>
+      utf8.decode(await client.run(command), allowMalformed: true);
+
+  @override
+  Future<TerminalSession> openSession(SessionRequest request) async {
+    final multiplexer = await _detectMultiplexer();
+    final command = launcher.attachOrCreate(
+      name: request.sessionName,
+      workingDirectory:
+          request.workingDirectory ?? host.defaultWorkingDirectory,
+      agent: request.agent,
+      multiplexer: multiplexer,
+    );
+
+    final pty = SSHPtyConfig(width: request.columns, height: request.rows);
+
+    // Run the multiplexer as the channel's command rather than typing it into
+    // a shell: no race against the shell's prompt, and nothing lands in the
+    // user's shell history.
+    final session = command.isEmpty
+        ? await client.shell(pty: pty, environment: request.environment)
+        : await client.execute(
+            command,
+            pty: pty,
+            environment: request.environment,
+          );
+
+    return _DirectTerminalSession(
+      client: client,
+      session: session,
+      multiplexer: multiplexer,
+      sessionName: request.sessionName,
+      launcher: launcher,
+    );
+  }
+
+  @override
+  Future<void> close() async {
+    client.close();
+    await client.done;
+  }
+
+  Future<MultiplexerKind> _detectMultiplexer() async {
     try {
-      final output = await client.run(TmuxLauncher.detectCommand);
-      return TmuxLauncher.parseDetectOutput(utf8.decode(output));
+      return TmuxLauncher.parseDetectOutput(
+        await run(TmuxLauncher.detectCommand),
+      );
     } catch (_) {
       // A host that will not answer a probe still deserves a shell; treat it
       // as having no multiplexer and let the UI warn about durability.

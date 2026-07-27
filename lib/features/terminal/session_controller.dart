@@ -17,7 +17,9 @@ class SessionController extends ChangeNotifier {
     required this.host,
     required this.request,
     required this.transport,
+    SshConnection? connection,
   }) {
+    _connection = connection;
     terminal
       ..onOutput = _handleInput
       ..onResize = _handleResize;
@@ -31,6 +33,9 @@ class SessionController extends ChangeNotifier {
   /// reasoning without holding a session's whole history in memory.
   final terminal = Terminal(maxLines: 4000);
 
+  /// Reused when the picker already authenticated to probe for agents, so
+  /// launching one does not mean a second handshake.
+  SshConnection? _connection;
   TerminalSession? _session;
   StreamSubscription<String>? _outputSubscription;
 
@@ -48,7 +53,8 @@ class SessionController extends ChangeNotifier {
     _setStatus(SessionStatus.connecting);
 
     try {
-      final session = await transport.connect(host, request);
+      final connection = _connection ??= await transport.connect(host);
+      final session = await connection.openSession(request);
       _session = session;
       multiplexer = session.multiplexer;
 
@@ -81,6 +87,8 @@ class SessionController extends ChangeNotifier {
     _outputSubscription = null;
     await session.detach();
     _session = null;
+    // The connection died with the socket; a reattach builds a fresh one.
+    _connection = null;
     _setStatus(SessionStatus.detached);
   }
 
@@ -97,6 +105,7 @@ class SessionController extends ChangeNotifier {
     _outputSubscription = null;
     await _session?.close();
     _session = null;
+    _connection = null;
     _setStatus(SessionStatus.closed);
   }
 
