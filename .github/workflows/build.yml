@@ -1,0 +1,116 @@
+name: Build app
+
+# Run this by hand from the Actions tab: pick a platform, wait, then download
+# the artifact from the run's summary page.
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: Which platform to build
+        type: choice
+        default: android
+        options: [android, ios, both]
+      build_mode:
+        description: Build mode
+        type: choice
+        default: release
+        options: [release, debug]
+
+permissions:
+  contents: read
+
+env:
+  FLUTTER_VERSION: 3.44.8
+
+jobs:
+  verify:
+    name: Analyze and test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+      - run: flutter pub get
+      - run: flutter analyze
+      - run: flutter test
+
+  android:
+    name: Android APK
+    needs: verify
+    if: inputs.platform == 'android' || inputs.platform == 'both'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+
+      - run: flutter pub get
+
+      # A universal APK rather than --split-per-abi: one file that installs on
+      # any phone, which is the point of a build you sideload by hand.
+      - name: Build APK
+        run: |
+          flutter build apk \
+            --${{ inputs.build_mode }} \
+            --build-number=${{ github.run_number }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mobilecode-android-${{ inputs.build_mode }}-${{ github.run_number }}
+          path: build/app/outputs/flutter-apk/app-${{ inputs.build_mode }}.apk
+          if-no-files-found: error
+          retention-days: 14
+
+  ios:
+    name: iOS IPA (unsigned)
+    needs: verify
+    if: inputs.platform == 'ios' || inputs.platform == 'both'
+    # iOS builds need Xcode, so this has to be a macOS runner. On a private
+    # repo those bill at 10x the Linux rate — worth knowing before you set
+    # this on a schedule.
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+
+      - run: flutter pub get
+
+      # --no-codesign because this workflow has no Apple certificates. The
+      # result is a real arm64 build that simply carries no signature yet.
+      - name: Build (unsigned)
+        run: |
+          flutter build ios \
+            --${{ inputs.build_mode }} \
+            --no-codesign \
+            --build-number=${{ github.run_number }}
+
+      # An .ipa is just a zip with the .app inside a Payload/ directory.
+      # `flutter build ipa` refuses without a signing identity, so assemble it
+      # ourselves and let the user's own sideloading tool sign it.
+      - name: Package unsigned IPA
+        run: |
+          mkdir -p build/ipa/Payload
+          cp -R build/ios/iphoneos/Runner.app build/ipa/Payload/
+          cd build/ipa
+          zip -qry mobilecode-unsigned.ipa Payload
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mobilecode-ios-unsigned-${{ inputs.build_mode }}-${{ github.run_number }}
+          path: build/ipa/mobilecode-unsigned.ipa
+          if-no-files-found: error
+          retention-days: 14

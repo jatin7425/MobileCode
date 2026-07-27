@@ -38,6 +38,43 @@ flutter test
 flutter run          # needs the Android SDK or Xcode
 ```
 
+## Getting a build onto your phone
+
+Actions → **Build app** → *Run workflow*. Pick `android`, `ios`, or `both` and
+a build mode. When it finishes, the artifacts are at the bottom of the run's
+summary page.
+
+GitHub always wraps artifacts in a zip, so what downloads is
+`mobilecode-android-release-7.zip` — unzip it to get the file inside.
+
+### Android
+
+Works as you would hope. The release APK is signed with the standard debug key
+(see `android/app/build.gradle.kts`), which is enough to install it yourself:
+copy the `.apk` to the phone, open it, and allow installing from unknown
+sources when prompted.
+
+That key is fine for personal sideloading and **not** fine for the Play Store,
+which rejects debug-signed uploads. Publishing means generating an upload
+keystore and wiring it into the Gradle release config.
+
+### iOS
+
+Worth knowing before you run it: **Apple does not let you install an app by
+downloading it on the phone.** The workflow produces an *unsigned* IPA, because
+signing requires Apple certificates this repo does not have. To get it running
+you need a computer and a sideloading tool — Sideloadly or AltStore — which
+re-signs the IPA with your own Apple ID and installs it over USB.
+
+With a free Apple ID that gives you an app that stops working after 7 days and
+a limit of 3 sideloaded apps; you re-sign to renew. A paid Apple Developer
+account ($99/year) raises that to a year.
+
+If you want an iOS build that installs directly, the path is a paid developer
+account plus a signing certificate and provisioning profile stored as repo
+secrets, and distribution through TestFlight. That is a real change to this
+workflow rather than a setting — say the word and I will wire it up.
+
 ## Layout
 
 ```
